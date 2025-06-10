@@ -1,0 +1,4 @@
+[34m[1mtrain: [0mScanning C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\datasets\yolo_dataset_all_20250610_192616\labels\train[0m[34m[1mtrain: [0mScanning C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\datasets\yolo_dataset_all_20250610_192616\labels\train[0m
+C:\Users\yuuji\AppData\Local\Programs\Python\Python313\Lib\site-packages\torch\utils\data\dataloader.py:665: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+[34m[1mval: [0mScanning C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\datasets\yolo_dataset_all_20250610_192616\labels\train.c[0m[34m[1mval: [0mScanning C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\datasets\yolo_dataset_all_20250610_192616\labels\train.c[0m

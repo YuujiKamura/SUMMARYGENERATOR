@@ -1,4 +1,0 @@
-path: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\datasets\yolo_dataset_thermometer_3_20250610_132235
-train: images/train
-val: images/val
-names: ['asphaltfinisher', 'backhoe_mini', 'caption_board_dekigata', 'caption_board_thermometer', 'new_al_rod_pavement_thickness', 'new_al_rod_soil_thickness', 'new_alminium_rod', 'role_driver_asphaltfinisher', 'role_driver_backhoe_break', 'role_driver_backhoe_level', 'role_driver_combined_roller', 'role_driver_tire_roller_3t', 'role_measurer_staff_asphalt_break_thickness', 'role_measurer_staff_setdown', 'role_measurer_staff_soil_thickness', 'role_measurer_thermometer', 'role_worker_emulsion_edge', 'role_worker_emulsion_spray', 'role_worker_sand_curing', 'role_worker_surface_level', 'role_worker_unload_soil', 'roller_conbined_2.5t', 'roller_tyres_3t', 'surface_crushed_stone', 'thermometer', 'truck_4t_loading_asphalt', 'truck_4t_loading_crushed_asphalt', 'truck_4t_loading_soil']
