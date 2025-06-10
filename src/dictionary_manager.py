@@ -1,0 +1,919 @@
+"""
+ユーザー辞書管理クラス。
+工種、種別、細別などのキャプション辞書を管理します。
+"""
+from __future__ import annotations
+import json
+import os
+import logging
+import re
+from typing import Dict, List, Optional, Set
+from dataclasses import dataclass
+
+from PyQt6.QtCore import QObject, pyqtSignal
+from src.utils.path_manager import path_manager
+from src.utils.chain_record_utils import ChainRecord, load_chain_records
+# 類似度計算用ライブラリ
+try:
+    from rapidfuzz import fuzz
+except ImportError:
+    logging.warning(
+        "rapidfuzz がインストールされていません。pip install rapidfuzz でインストールしてください。マッチング精度が低下します。")
+    # フォールバック用の簡易実装
+
+    class fuzz:
+        @staticmethod
+        def ratio(s1: str, s2: str) -> float:
+            """文字列の類似度を計算（0-100）"""
+            if not s1 or not s2:
+                return 0
+            return 100 if s1 == s2 else 50
+
+        @staticmethod
+        def partial_ratio(s1: str, s2: str) -> float:
+            """部分文字列の類似度を計算（0-100）"""
+            if not s1 or not s2:
+                return 0
+            if s1 in s2 or s2 in s1:
+                return 90
+            return 0
+
+
+# 文字列正規化用の変換テーブル（全角→半角、空白削除）
+NORMALIZE_TABLE = str.maketrans({
+    # 全角スペース、半角スペース、タブを削除
+    '　': None, ' ': None, '\t': None,
+    # 全角カナを半角に変換（必要に応じて拡張）
+    'ａ': 'a', 'ｂ': 'b', 'ｃ': 'c', 'ｄ': 'd', 'ｅ': 'e',
+    'ｆ': 'f', 'ｇ': 'g', 'ｈ': 'h', 'ｉ': 'i', 'ｊ': 'j',
+    'ｋ': 'k', 'ｌ': 'l', 'ｍ': 'm', 'ｎ': 'n', 'ｏ': 'o',
+    'ｐ': 'p', 'ｑ': 'q', 'ｒ': 'r', 'ｓ': 's', 'ｔ': 't',
+    'ｕ': 'u', 'ｖ': 'v', 'ｗ': 'w', 'ｘ': 'x', 'ｙ': 'y', 'ｚ': 'z',
+    'Ａ': 'A', 'Ｂ': 'B', 'Ｃ': 'C', 'Ｄ': 'D', 'Ｅ': 'E',
+    'Ｆ': 'F', 'Ｇ': 'G', 'Ｈ': 'H', 'Ｉ': 'I', 'Ｊ': 'J',
+    'Ｋ': 'K', 'Ｌ': 'L', 'Ｍ': 'M', 'Ｎ': 'N', 'Ｏ': 'O',
+    'Ｐ': 'P', 'Ｑ': 'Q', 'Ｒ': 'R', 'Ｓ': 'S', 'Ｔ': 'T',
+    'Ｕ': 'U', 'Ｖ': 'V', 'Ｗ': 'W', 'Ｘ': 'X', 'Ｙ': 'Y', 'Ｚ': 'Z',
+    '０': '0', '１': '1', '２': '2', '３': '3', '４': '4',
+    '５': '5', '６': '6', '７': '7', '８': '8', '９': '9',
+})
+
+# 追加の文字列正規化用の変換テーブル（機能拡張用）
+EXTRA_NORMALIZE_TABLE = str.maketrans({})
+
+
+def normalize(text: str) -> str:
+    """文字列を正規化する（全角→半角、空白削除、小文字化）
+
+    Args:
+        text: 正規化する文字列
+
+    Returns:
+        正規化された文字列
+    """
+    if not text:
+        return ""
+
+    # 全角→半角、空白削除
+    normalized = text.translate(NORMALIZE_TABLE)
+
+    # 全角文字を半角に変換（残り）
+    normalized = re.sub(r'[Ａ-Ｚａ-ｚ０-９]',
+                        lambda x: chr(ord(x.group(0)) - 0xFEE0),
+                        normalized)
+
+    # 小文字化して返す
+    return normalized.lower()
+
+
+# 正規表現パターン - 特殊な識別子（アルファベットと数字やハイフンの組み合わせ）を検出
+KEYWORD_PATTERN = re.compile(
+    r'([A-Za-z]+[\-\d=]+\d*|[A-Za-z]+[^\s\.,;:()]*[\d]+)')
+
+
+class DictionaryManager(QObject):
+    """ユーザー辞書管理クラス"""
+
+    # シグナル定義
+    dictionary_changed = pyqtSignal()  # 辞書変更時に発火
+
+    # 辞書タイプ定数
+    CATEGORY = "category"         # 工種
+    TYPE = "type"                 # 種別
+    SUBTYPE = "subtype"           # 細別
+    REMARKS = "remarks"           # 備考
+    STATION = "station"           # 測点
+    CONTROL_VALUES = "control"    # 管理値（設計値・実測値）
+
+    # 類似度マッチングの閾値（0-100）
+    MATCH_THRESHOLD = 70
+
+    def __init__(self, settings_manager=None):
+        """初期化
+
+        Args:
+            settings_manager: 設定管理インスタンス
+        """
+        super().__init__()
+        self.settings = settings_manager
+
+        # 辞書データ（辞書タイプ：エントリリスト）- 後方互換性用
+        self.dictionaries = {
+            self.CATEGORY: [],
+            self.TYPE: [],
+            self.SUBTYPE: [],
+            self.REMARKS: [],
+            self.STATION: [],
+            self.CONTROL_VALUES: []
+        }
+
+        # チェーン辞書レコードリスト（新しいデータ構造）
+        self.records: list[ChainRecord] = []
+
+        # 現在の工事名（異なる工事ごとに辞書を分けるため）
+        self.current_project = "default"
+
+        # 保存用ディレクトリを準備
+        self._ensure_dictionary_dir()
+
+        # アクティブな辞書の設定を確認
+        active_dict_file = os.path.join(
+            self._get_dictionary_dir(),
+            "active_dictionary.json")
+        if os.path.exists(active_dict_file):
+            try:
+                with open(active_dict_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    active_dict = data.get("active")
+                    if active_dict:
+                        self.current_project = active_dict
+                        logging.info(f"アクティブな辞書を使用します: {active_dict}")
+            except Exception as e:
+                logging.error(f"アクティブ辞書の読み込みエラー: {e}")
+
+        # --- デバッグ: recordsファイルのパス・存在・件数を出力 ---
+        records_file = self._get_records_file()
+        print(f"[DEBUG] recordsファイルパス: {records_file}")
+        print(f"[DEBUG] recordsファイル存在: {os.path.exists(records_file)}")
+        # 辞書をロード
+        self.load_dictionaries()
+        print(f"[DEBUG] recordsロード件数: {len(self.records)}")
+        # 辞書をロード
+        self.load_dictionaries()
+
+        # 辞書の内容をログに出力
+        self._log_dictionary_stats()
+
+    # ----- レコード単位操作（新API） -----
+
+    def add_record(self, record_dict: Dict[str, str]) -> bool:
+        """チェーンレコードの追加
+
+        Args:
+            record_dict: レコードデータ辞書
+
+        Returns:
+            成功したかどうか
+        """
+        record = ChainRecord.from_dict(record_dict)
+
+        # 重複チェック（正規化して比較）
+        for existing in self.records:
+            # すべての非空フィールドが一致する場合は重複とみなす
+            if (normalize(existing.category) == normalize(record.category) and
+                normalize(existing.type) == normalize(record.type) and
+                normalize(existing.subtype) == normalize(record.subtype) and
+                normalize(existing.remarks) == normalize(record.remarks) and
+                normalize(existing.station) == normalize(record.station) and
+                    normalize(existing.control) == normalize(record.control)):
+                return False
+
+        # レコード追加
+        self.records.append(record)
+
+        # 個別辞書も更新（後方互換性のため）
+        self._update_individual_dictionaries()
+
+        # 変更を通知
+        self.dictionary_changed.emit()
+
+        return True
+
+    def update_record(self, index: int, record_dict: Dict[str, str]) -> bool:
+        """チェーンレコードの更新
+
+        Args:
+            index: 更新するレコードのインデックス
+            record_dict: 新しいレコードデータ辞書
+
+        Returns:
+            成功したかどうか
+        """
+        if not (0 <= index < len(self.records)):
+            logging.error(f"無効なレコードインデックス: {index}")
+            return False
+
+        # レコード更新
+        self.records[index] = ChainRecord.from_dict(record_dict)
+
+        # 個別辞書も更新（後方互換性のため）
+        self._update_individual_dictionaries()
+
+        # 変更を通知
+        self.dictionary_changed.emit()
+
+        return True
+
+    def delete_record(self, index: int) -> bool:
+        """チェーンレコードの削除
+
+        Args:
+            index: 削除するレコードのインデックス
+
+        Returns:
+            成功したかどうか
+        """
+        if not (0 <= index < len(self.records)):
+            logging.error(f"無効なレコードインデックス: {index}")
+            return False
+
+        # レコード削除
+        del self.records[index]
+
+        # 個別辞書も更新（後方互換性のため）
+        self._update_individual_dictionaries()
+
+        # 変更を通知
+        self.dictionary_changed.emit()
+
+        return True
+
+    def insert_record(self, index: int, record_dict: Dict[str, str]) -> bool:
+        """指定した位置にレコードを挿入
+
+        Args:
+            index: 挿入位置のインデックス
+            record_dict: レコードデータ辞書
+
+        Returns:
+            挿入に成功した場合はTrue、失敗した場合はFalse
+        """
+        if not (0 <= index <= len(self.records)):
+            logging.error(f"無効なレコードインデックス: {index}")
+            return False
+
+        record = ChainRecord.from_dict(record_dict)
+
+        # レコードを挿入
+        self.records.insert(index, record)
+
+        # 個別辞書も更新（後方互換性のため）
+        self._update_individual_dictionaries()
+
+        # 変更を通知
+        self.dictionary_changed.emit()
+
+        return True
+
+    # ----- 従来のAPI（後方互換性） -----
+
+    def get_entries(self, dict_type: str) -> List[str]:
+        """特定タイプの辞書エントリリストを取得
+
+        Args:
+            dict_type: 辞書タイプ（CATEGORY, TYPE など）
+
+        Returns:
+            エントリのリスト
+        """
+        if dict_type in self.dictionaries:
+            return self.dictionaries[dict_type]
+        return []
+
+    def add_entry(self, dict_type: str, entry: str) -> bool:
+        """辞書エントリを追加
+
+        Args:
+            dict_type: 辞書タイプ
+            entry: 追加するエントリ
+
+        Returns:
+            成功したかどうか
+        """
+        if dict_type not in self.dictionaries:
+            logging.error(f"無効な辞書タイプ: {dict_type}")
+            return False
+
+        # 重複チェック
+        if entry in self.dictionaries[dict_type]:
+            return False
+
+        # 追加
+        self.dictionaries[dict_type].append(entry)
+        self.dictionaries[dict_type].sort()  # ソート
+
+        # レコードにも反映
+        self._update_records_from_dictionaries()
+
+        # 変更を通知
+        self.dictionary_changed.emit()
+
+        return True
+
+    def remove_entry(self, dict_type: str, entry: str) -> bool:
+        """辞書エントリを削除
+
+        Args:
+            dict_type: 辞書タイプ
+            entry: 削除するエントリ
+
+        Returns:
+            成功したかどうか
+        """
+        if dict_type not in self.dictionaries:
+            logging.error(f"無効な辞書タイプ: {dict_type}")
+            return False
+
+        if entry not in self.dictionaries[dict_type]:
+            return False
+
+        # 削除
+        self.dictionaries[dict_type].remove(entry)
+
+        # レコードにも反映
+        self._update_records_from_dictionaries()
+
+        # 変更を通知
+        self.dictionary_changed.emit()
+
+        return True
+
+    def update_entry(
+            self,
+            dict_type: str,
+            old_entry: str,
+            new_entry: str) -> bool:
+        """辞書エントリを更新
+
+        Args:
+            dict_type: 辞書タイプ
+            old_entry: 更新前のエントリ
+            new_entry: 更新後のエントリ
+
+        Returns:
+            成功したかどうか
+        """
+        if dict_type not in self.dictionaries:
+            logging.error(f"無効な辞書タイプ: {dict_type}")
+            return False
+
+        # 古いエントリを削除し、新しいエントリを追加
+        if old_entry in self.dictionaries[dict_type]:
+            self.dictionaries[dict_type].remove(old_entry)
+            self.dictionaries[dict_type].append(new_entry)
+            self.dictionaries[dict_type].sort()  # ソート
+
+            # レコードにも反映
+            self._update_records_from_dictionaries()
+
+            # 変更を通知
+            self.dictionary_changed.emit()
+
+            return True
+
+        return False
+
+    def load_dictionaries(self) -> bool:
+        """ユーザー辞書をロード
+
+        Returns:
+            成功したかどうか
+        """
+        dict_file = self._get_dictionary_file()
+        records_file = self._get_records_file()
+
+        logging.info(f"辞書を読み込みます: {dict_file}")
+        logging.info(f"レコードを読み込みます: {records_file}")
+
+        # レコードファイルがある場合は優先的にロード（参照型・従来型両対応）
+        if os.path.exists(records_file):
+            try:
+                self.records = load_chain_records(records_file)
+                # --- ここで work_category の補完を行う ---
+                for rec in self.records:
+                    if (not getattr(rec, "work_category", None)) and getattr(rec, "category", None):
+                        rec.work_category = rec.category
+                # --- 全件ログ出力 ---
+                logging.info(f"読み込んだChainRecord件数: {len(self.records)}")
+                for idx, rec in enumerate(self.records):
+                    logging.info(f"ChainRecord[{idx}]: {rec}")
+                self._update_individual_dictionaries()
+                logging.info(f"ユーザー辞書（レコード）を読み込みました: {records_file}")
+                self.dictionary_changed.emit()
+                return True
+            except Exception as e:
+                # 例外発生時にデータ内容を出力して原因調査
+                import traceback
+                logging.error(f"辞書レコードファイル読み込みエラー: {str(e)}\n{traceback.format_exc()}")
+                try:
+                    with open(records_file, 'r', encoding='utf-8') as f:
+                        debug_data = f.read()
+                    logging.error(f"[DEBUG] レコードファイル内容: {debug_data[:1000]}")
+                except Exception as e2:
+                    logging.error(f"[DEBUG] レコードファイル内容取得失敗: {e2}")
+                # 従来の辞書ファイルにフォールバック
+
+        # 従来の辞書ファイルをロード
+        if os.path.exists(dict_file):
+            try:
+                with open(dict_file, 'r', encoding='utf-8') as f:
+                    loaded_data = json.load(f)
+                    for dict_type in self.dictionaries.keys():
+                        if dict_type in loaded_data:
+                            self.dictionaries[dict_type] = loaded_data[dict_type]
+                    self._update_records_from_dictionaries()
+                logging.info(f"ユーザー辞書を読み込みました: {dict_file}")
+                self.dictionary_changed.emit()
+                return True
+            except Exception as e:
+                logging.error(f"辞書ファイル読み込みエラー: {str(e)}")
+
+        logging.info(f"ユーザー辞書ファイルが見つかりません: {dict_file}")
+        return False
+
+    def save_dictionaries(self) -> bool:
+        """ユーザー辞書を保存
+
+        Returns:
+            成功したかどうか
+        """
+        dict_file = self._get_dictionary_file()
+        records_file = self._get_records_file()
+
+        logging.info(f"辞書を保存します: {dict_file}")
+        logging.info(
+            f"レコードを保存します: {records_file}"
+        )
+
+        try:
+            # 保存先ディレクトリの確認
+            os.makedirs(os.path.dirname(dict_file), exist_ok=True)
+            os.makedirs(os.path.dirname(records_file), exist_ok=True)
+
+            # 従来の辞書ファイル形式で保存
+            with open(dict_file, 'w', encoding='utf-8') as f:
+                json.dump(self.dictionaries, f, ensure_ascii=False, indent=2)
+
+            # レコード形式でも保存
+            with open(records_file, 'w', encoding='utf-8') as f:
+                records_data = [rec.to_dict() for rec in self.records]
+                json.dump(records_data, f, ensure_ascii=False, indent=2)
+
+            logging.info(f"ユーザー辞書を保存しました: {dict_file}")
+            return True
+
+        except Exception as e:
+            logging.error(f"辞書ファイル保存エラー: {str(e)}")
+            return False
+
+    def set_project(self, project_name: str):
+        """現在の工事名を設定し、辞書を切り替える
+
+        Args:
+            project_name: 工事名
+        """
+        if not project_name:
+            logging.error("プロジェクト名が指定されていません")
+            return
+
+        # 同じ名前なら何もしない
+        if project_name == self.current_project:
+            logging.info(f"既に '{project_name}' が設定されています")
+            return
+
+        # 現在の辞書を保存
+        self.save_dictionaries()
+
+        # 辞書ファイルの存在を確認
+        dict_dir = self._get_dictionary_dir()
+        custom_dir = os.path.join(dict_dir, "custom")
+
+        # 候補となるファイルパスリスト
+        dict_files = [
+            # 通常の辞書ファイル
+            os.path.join(dict_dir, f"{project_name}_dictionary.json"),
+            # カスタム辞書
+            os.path.join(custom_dir, f"{project_name}.json"),
+            # レガシーパス
+            os.path.join(dict_dir, project_name, "dictionary.json")
+        ]
+
+        # いずれかのファイルが存在するか確認
+        exists = any(os.path.exists(path) for path in dict_files)
+
+        if not exists:
+            logging.warning(f"プロジェクト '{project_name}' の辞書ファイルが見つかりません")
+            # ただし、project_nameがdefaultの場合は常に許可
+            if project_name != "default":
+                return
+
+        # 工事名を変更
+        logging.info(f"辞書を切り替えました: {self.current_project} -> {project_name}")
+        self.current_project = project_name
+
+        # 新しい工事の辞書をロード
+        self.load_dictionaries()
+
+        # 辞書の内容をログ出力
+        self._log_dictionary_stats()
+
+    def reload_dictionaries(self):
+        """辞書をリロード"""
+        # 現在の辞書を保存
+        self.save_dictionaries()
+
+        # 辞書を再ロード
+        self.load_dictionaries()
+
+        # 辞書の内容をログ出力
+        self._log_dictionary_stats()
+
+        # 変更を通知
+        self.dictionary_changed.emit()
+
+    def _log_dictionary_stats(self):
+        """辞書の統計情報をログに出力"""
+        logging.info(f"辞書ファイル: {self._get_dictionary_file()}")
+        logging.info(f"レコードファイル: {self._get_records_file()}")
+        logging.info(f"レコード数: {len(self.records)}")
+
+        # 各タイプの項目数を出力
+        for dict_type, entries in self.dictionaries.items():
+            logging.info(f"  {dict_type} 項目数: {len(entries)}")
+
+    # ----- マッチング機能 -----
+
+    def match_text_with_dictionary(self, text: str) -> Dict[str, str]:
+        """OCRテキストと辞書のマッチング（精度改善版）
+
+        Args:
+            text: OCRで検出されたテキスト
+
+        Returns:
+            マッチング結果（辞書タイプ: マッチしたエントリ）
+        """
+        if not text or not self.records:
+            return {}
+
+        # 1. キーワードベースのマッチング
+        keyword_results = self._keyword_match(text)
+        keyword_score = 0
+        if keyword_results:
+            # キーワードマッチのスコアを計算（マッチ数合計）
+            keyword_score = len(keyword_results)
+
+        # 2. ファジーマッチング（OCRテキストの各行・各フィールドで最大スコア）
+        best_record = None
+        best_score = 0
+        best_record_dict = None
+        ocr_lines = [normalize(line) for line in text.splitlines() if line.strip()]
+        for record in self.records:
+            record_dict = record.to_dict()
+            for field, value in record_dict.items():
+                if not value:
+                    continue
+                rec_val = normalize(str(value))
+                for ocr_line in ocr_lines:
+                    score = fuzz.partial_ratio(rec_val, ocr_line)
+                    if score > best_score:
+                        best_score = score
+                        best_record = record
+                        best_record_dict = record_dict
+        # 3. 完全一致（OCRテキストに完全一致するフィールドがあれば最優先）
+        for record in self.records:
+            record_dict = record.to_dict()
+            for field, value in record_dict.items():
+                if not value:
+                    continue
+                if str(value) in text:
+                    # 完全一致があれば即返す
+                    return {k: v for k, v in record_dict.items() if v}
+
+        # 4. 最良スコアのものを返す（キーワードマッチとファジーマッチを比較）
+        if best_score >= self.MATCH_THRESHOLD:
+            return {k: v for k, v in best_record_dict.items() if v}
+        elif keyword_results:
+            return keyword_results
+        else:
+            # どれも該当しない場合は空
+            return {}
+
+    def record_has_keywords(self, record, keywords) -> bool:
+        """
+        レコードのphoto_categoryにkeywordsのいずれかが含まれる場合Trueを返す
+        Args:
+            record: チェック対象のレコード
+            keywords: 検索キーワード（リスト）
+        Returns:
+            bool
+        """
+        photo_category = getattr(record, "photo_category", "") or ""
+        return any(kw in photo_category for kw in keywords)
+
+    def match_roles_records_normal(self, roles, role_mapping, records) -> list:
+        """
+        recordsのphoto_categoryに「出来形」や「出来形管理」などのキーワードが含まれるレコードのみ返す。
+        """
+        dekigata_keywords = ["出来形", "出来形管理"]
+        return [rec for rec in records if self.record_has_keywords(rec, dekigata_keywords)]
+
+    def is_dekigata_related_record(self, record) -> bool:
+        """
+        レコードのphoto_categoryに「出来形」や「出来形管理」などのキーワードが含まれる場合Trueを返す
+        """
+        dekigata_keywords = ["出来形", "出来形管理"]
+        return self.record_has_keywords(record, dekigata_keywords)
+
+    def is_hinshitsu_related_record(self, record) -> bool:
+        """
+        レコードのphoto_categoryに「品質管理」などのキーワードが含まれる場合Trueを返す
+        """
+        hinshitsu_keywords = ["品質管理"]
+        return self.record_has_keywords(record, hinshitsu_keywords)
+
+    def _best_match(self, text: str) -> tuple[Optional[ChainRecord], float]:
+        """最も良いマッチのレコードとスコアを返す
+
+        Args:
+            text: OCRで検出されたテキスト
+
+        Returns:
+            (最良マッチレコード, スコア) のタプル
+        """
+        if not text or not self.records:
+            return None, 0
+
+        # テキストを正規化
+        text_norm = normalize(text)
+
+        best_record = None
+        best_score = 0
+
+        for record in self.records:
+            # 各レコードのトークン（正規化済み）とマッチング
+            record_tokens = record.tokens()
+
+            if not record_tokens:
+                continue
+
+            # 最も高いスコアを保持
+            score = max(
+                fuzz.partial_ratio(text_norm, token)
+                for token in record_tokens
+            )
+
+            if score > best_score:
+                best_record = record
+                best_score = score
+
+        return best_record, best_score
+
+    def _legacy_match_text(self, text: str) -> Dict[str, str]:
+        """従来の完全一致マッチング（フォールバック用）
+
+        Args:
+            text: OCRで検出されたテキスト
+
+        Returns:
+            マッチング結果（辞書タイプ: マッチしたエントリ）
+        """
+        result = {}
+
+        # 各辞書タイプに対して
+        for dict_type, entries in self.dictionaries.items():
+            # 辞書の各エントリに対して
+            for entry in entries:
+                # テキストに含まれているかチェック
+                if entry and entry in text:
+                    # マッチしたら結果に追加
+                    result[dict_type] = entry
+                    break
+
+        return result
+
+    def _extract_keywords(self, text: str) -> List[str]:
+        """テキストからキーワードを抽出
+
+        Args:
+            text: 解析するテキスト
+
+        Returns:
+            抽出されたキーワードのリスト
+        """
+        if not text:
+            return []
+
+        keywords = []
+
+        # まず特殊なパターン（H1=50、RM-40のような識別子）を抽出
+        special_patterns = re.findall(
+            r'([A-Za-z]+\d*[\-=]+\d+|[A-Za-z]+\d*\-[A-Za-z]+\d*)', text)
+        keywords.extend(special_patterns)
+
+        # 残りのテキストをスペース、カンマ、括弧などで分割
+        # 特殊パターンが抽出されたテキストを一時的に置換して分割
+        temp_text = text
+        for pattern in special_patterns:
+            temp_text = temp_text.replace(pattern, "")
+
+        words = re.split(r'[\s\.,;:()\[\]]+', temp_text)
+
+        for word in words:
+            if not word or len(word) < 2:  # 2文字未満は無視
+                continue
+
+            # 通常の単語を追加
+            keywords.append(word)
+
+        # 重複を削除して返す
+        return list(set(keywords))
+
+    def _keyword_match(self, text: str) -> Dict[str, str]:
+        """キーワードベースのマッチング
+
+        テキストから抽出したキーワードと辞書レコードのキーワードが一致するかを調べる
+
+        Args:
+            text: OCRで検出されたテキスト
+
+        Returns:
+            マッチング結果（辞書タイプ: マッチしたエントリ）
+        """
+        if not text or not self.records:
+            return {}
+
+        # テキストからキーワードを抽出
+        text_keywords = self._extract_keywords(text)
+        if not text_keywords:
+            return {}
+
+        # テキストキーワードを正規化（比較のため）
+        text_keywords_norm = {normalize(kw) for kw in text_keywords}
+
+        result = {}
+        best_matches = {}  # 各フィールドタイプごとの最良マッチを保存
+
+        # 各レコードを調査
+        for record in self.records:
+            record_dict = record.to_dict()
+            record_keywords = record.keywords()
+
+            # レコードのキーワードを正規化
+            record_keywords_norm = {normalize(kw) for kw in record_keywords}
+
+            # レコードの各フィールドを調査
+            for dict_type, value in record_dict.items():
+                if not value:
+                    continue
+
+                # テキストキーワードとレコードキーワードの重複を検出
+                matches = text_keywords_norm.intersection(record_keywords_norm)
+
+                # 一致があればそのフィールドを結果に追加
+                if matches:
+                    # より多くのキーワードがマッチする場合、または初めてのマッチングの場合
+                    match_count = len(matches)
+                    if dict_type not in best_matches or match_count > best_matches[dict_type][0]:
+                        best_matches[dict_type] = (match_count, value)
+
+        # 最良マッチを結果に追加
+        for dict_type, (_, value) in best_matches.items():
+            result[dict_type] = value
+
+        return result
+
+    def find_best_matches(
+            self,
+            ocr_text: str,
+            fields=None,
+            top_n=3,
+            threshold=70):
+        """
+        OCRテキストと全レコード・全フィールド・全OCR行の類似度を計算し、
+        スコア付きで上位N件の候補リストを返す。
+        Args:
+            ocr_text: OCRで検出されたテキスト
+            fields: チェック対象フィールド（Noneなら全フィールド）
+            top_n: 上位何件返すか
+            threshold: 類似度スコアのしきい値（0-100）
+        Returns:
+            List[dict]:
+                {
+                    'record_index': int,
+                    'record': DictRecord,
+                    'score': float,
+                    'matched_field': str,
+                    'ocr_line': str
+                }
+        """
+        if not ocr_text or not self.records:
+            return []
+        if fields is None:
+            fields = [
+                "category",
+                "type",
+                "subtype",
+                "remarks",
+                "station",
+                "control"]
+        ocr_lines = [normalize(line)
+                     for line in ocr_text.splitlines() if line.strip()]
+        matches = []
+        for idx, record in enumerate(self.records):
+            best_score = 0
+            best_line = ""
+            best_field = ""
+            for field in fields:
+                field_value = normalize(getattr(record, field, ""))
+                if not field_value:
+                    continue
+                for ocr_line in ocr_lines:
+                    score = fuzz.partial_ratio(field_value, ocr_line)
+                    if score > best_score:
+                        best_score = score
+                        best_line = ocr_line
+                        best_field = field
+            if best_score >= threshold:
+                matches.append({
+                    "record_index": idx,
+                    "record": record,
+                    "score": best_score,
+                    "matched_field": best_field,
+                    "ocr_line": best_line
+                })
+        matches.sort(key=lambda x: x["score"], reverse=True)
+        return matches[:top_n]
+
+    # ----- 内部ヘルパーメソッド -----
+
+    def _update_individual_dictionaries(self):
+        """レコードリストから個別辞書を更新"""
+        # 辞書をクリア
+        for dict_type in self.dictionaries:
+            self.dictionaries[dict_type] = []
+
+        # レコードから辞書を生成
+        for record in self.records:
+            record_dict = record.to_dict()
+
+            for dict_type, value in record_dict.items():
+                if dict_type in self.dictionaries:
+                    if value and value not in self.dictionaries[dict_type]:
+                        self.dictionaries[dict_type].append(value)
+        # 各辞書をソート
+        for dict_type in self.dictionaries:
+            self.dictionaries[dict_type].sort()
+
+    def _update_records_from_dictionaries(self):
+        """古い形式の個別辞書からレコードを生成（必要に応じて）"""
+        # 既存レコードがある場合は操作しない
+        if self.records:
+            return
+
+        # 各タイプの辞書から一時的なレコードセットを作成
+        for category in self.dictionaries.get(self.CATEGORY, []):
+            for type_value in self.dictionaries.get(self.TYPE, []):
+                record = ChainRecord(remarks="", photo_category=category, type=type_value)
+                self.records.append(record)
+
+    def _get_dictionary_file(self) -> str:
+        """現在の工事用の辞書ファイルパスを取得
+
+        Returns:
+            辞書ファイルのパス
+        """
+        # path_manager経由で取得
+        return str(path_manager.default_records)
+
+    def _get_records_file(self) -> str:
+        """現在の工事用のレコードファイルパスを取得
+
+        Returns:
+            レコードファイルのパス
+        """
+        # path_manager経由で取得
+        return str(path_manager.default_records)
+
+    def _get_dictionary_dir(self) -> str:
+        """辞書ディレクトリのパスを取得
+
+        Returns:
+            辞書ディレクトリのパス
+        """
+        # path_manager経由で取得
+        return str(path_manager.src_dir)
+
+    def _ensure_dictionary_dir(self):
+        """辞書ディレクトリが存在することを確認し、なければ作成"""
+        dict_dir = self._get_dictionary_dir()
+        os.makedirs(dict_dir, exist_ok=True)

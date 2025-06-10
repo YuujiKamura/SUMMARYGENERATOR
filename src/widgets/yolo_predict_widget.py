@@ -14,6 +14,8 @@ from src.utils.path_manager import path_manager
 from .detect_result_widget import DetectResultWidget
 import os
 import csv
+import json
+SETTINGS_PATH = os.path.join(os.path.expanduser("~"), ".yolo_predict_widget_settings.json")
 
 class YoloPredictThread(QThread):
     output = pyqtSignal(str)
@@ -124,6 +126,48 @@ class YoloPredictWidget(QWidget):
         layout.addWidget(self.log_text)
         layout.addStretch(1)
         self.refresh_models()
+        self.restore_settings()
+
+    def save_settings(self):
+        """現在のモデル・画像フォルダを保存"""
+        data = {
+            "model_path": self.model_combo.currentData(),
+            "image_dir": self.image_dir_edit.text(),
+            "conf": self.conf_spin.value(),
+        }
+        try:
+            with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[設定保存エラー] {e}")
+
+    def restore_settings(self):
+        """前回保存したモデル・画像フォルダを復元"""
+        try:
+            if os.path.exists(SETTINGS_PATH):
+                with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                # モデルパス復元
+                model_path = data.get("model_path")
+                if model_path:
+                    for i in range(self.model_combo.count()):
+                        if self.model_combo.itemData(i) == model_path:
+                            self.model_combo.setCurrentIndex(i)
+                            break
+                # 画像フォルダ復元
+                image_dir = data.get("image_dir")
+                if image_dir:
+                    self.image_dir_edit.setText(image_dir)
+                # 信頼度復元
+                conf = data.get("conf")
+                if conf:
+                    self.conf_spin.setValue(conf)
+        except Exception as e:
+            print(f"[設定復元エラー] {e}")
+
+    def closeEvent(self, event):
+        self.save_settings()
+        super().closeEvent(event)
 
     def refresh_models(self):
         """利用可能なYOLOモデルを更新（パスマネージャー経由でsrc/datasets配下の自作モデルも含める）"""
@@ -151,12 +195,15 @@ class YoloPredictWidget(QWidget):
             for pt_file in dataset_dir.glob("*.pt"):
                 label = f"{pt_file.parent.parent.parent.parent.name}/{pt_file.name} (自作)"
                 self.model_combo.addItem(label, str(pt_file))
+        # モデルリスト更新後に復元も再実行
+        self.restore_settings()
 
     def select_image_dir(self):
         """画像フォルダ選択ダイアログ"""
         dir_path = QFileDialog.getExistingDirectory(self, "画像フォルダを選択")
         if dir_path:
             self.image_dir_edit.setText(dir_path)
+        self.save_settings()
 
     def start_prediction(self):
         """推論処理を開始"""
@@ -219,3 +266,4 @@ class YoloPredictWidget(QWidget):
                 self.log_text.append(f"[警告] predict_results.csvが見つかりません: {csv_path}")
         else:
             self.log_text.append(f"推論に失敗しました (コード: {return_code})\n{result}")
+        self.save_settings()
