@@ -1,0 +1,277 @@
+[
+  {
+    "display": "2.5tコンバインドローラー",
+    "label": "roller_conbined_2.5t",
+    "category": "machine"
+  },
+  {
+    "display": "3tタイヤローラー",
+    "label": "roller_tyres_3t",
+    "category": "machine"
+  },
+  {
+    "display": "4tダンプ",
+    "label": "truck_4t",
+    "category": "machine"
+  },
+  {
+    "display": "4tダンプ（As積載状態）",
+    "label": "truck_4t_loading_asphalt",
+    "category": "machine"
+  },
+  {
+    "display": "4tダンプ（砕石ダンプ状態）",
+    "label": "truck_4t_loading_soil",
+    "category": "machine"
+  },
+  {
+    "display": "アスファルトフィニッシャ",
+    "label": "asphaltfinisher",
+    "category": "machine"
+  },
+  {
+    "display": "カラーコーン",
+    "label": "safetycone",
+    "category": "sign_board"
+  },
+  {
+    "display": "ガードマン",
+    "label": "role_guardman",
+    "category": "worker"
+  },
+  {
+    "display": "バックホウ",
+    "label": "backhoe_large",
+    "category": "machine"
+  },
+  {
+    "display": "ミニバックホウ",
+    "label": "backhoe_mini",
+    "category": "machine"
+  },
+  {
+    "display": "作業者_ハンドガイドローラー転圧",
+    "label": "role_worker_hand_guide_roller_compaction",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_ペーブメントカッティング",
+    "label": "role_worker_pavementcutting",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_ミーティング時",
+    "label": "role_worker_meeting",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_ランマー転圧",
+    "label": "role_worker_ram_compaction",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_乳剤散布",
+    "label": "role_worker_emulsion_spray",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_乳剤端部塗布",
+    "label": "role_worker_emulsion_edge",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_区画線工",
+    "label": "role_worker_linepainter",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_舗装版破砕",
+    "label": "role_worker_pavement_break",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_表層整正",
+    "label": "role_worker_surface_level",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_路盤整正",
+    "label": "role_worker_roadbed",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_路盤材搬入",
+    "label": "role_worker_unload_soil",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_養生砂散布",
+    "label": "role_worker_sand_curing",
+    "category": "worker"
+  },
+  {
+    "display": "作業車",
+    "label": "truck_cargo",
+    "category": "machine"
+  },
+  {
+    "display": "標尺",
+    "label": "new_alminium_rod",
+    "category": "sign_board"
+  },
+  {
+    "display": "温度計",
+    "label": "thermometer",
+    "category": ""
+  },
+  {
+    "display": "測定者_レベル",
+    "label": "role_measurer_level",
+    "category": "measurer"
+  },
+  {
+    "display": "測定者_標尺",
+    "label": "role_measurer_staff",
+    "category": "measurer"
+  },
+  {
+    "display": "測定者_標尺_下がり",
+    "label": "role_measurer_staff_setdown",
+    "category": "measurer"
+  },
+  {
+    "display": "測定者_標尺_既設舗装厚",
+    "label": "role_measurer_staff_asphalt_break_thickness",
+    "category": "measurer"
+  },
+  {
+    "display": "測定者_標尺_砕石厚",
+    "label": "role_measurer_staff_soil_thickness",
+    "category": "measurer"
+  },
+  {
+    "display": "測定者_温度計",
+    "label": "role_measurer_thermometer",
+    "category": "measurer"
+  },
+  {
+    "display": "測定者_路面長さ",
+    "label": "role_measurer_pavementlength",
+    "category": "measurer"
+  },
+  {
+    "display": "重機運転者_3tタイヤローラー",
+    "label": "role_driver_tire_roller_3t",
+    "category": "machine_driver"
+  },
+  {
+    "display": "重機運転者_アスファルトフィニッシャ",
+    "label": "role_driver_asphaltfinisher",
+    "category": "machine_driver"
+  },
+  {
+    "display": "重機運転者_コンバインドローラー",
+    "label": "role_driver_combined_roller",
+    "category": "machine_driver"
+  },
+  {
+    "display": "重機運転者_バックホウ",
+    "label": "role_driver_backhoe",
+    "category": "machine_driver"
+  },
+  {
+    "display": "重機運転者_バックホウ_不陸整正",
+    "label": "role_driver_backhoe_level",
+    "category": "machine_driver"
+  },
+  {
+    "display": "重機運転者_バックホウ_舗装版破砕",
+    "label": "role_driver_backhoe_break",
+    "category": "machine_driver"
+  },
+  {
+    "display": "重機運転者_バックホウ_舗装版積込",
+    "label": "role_driver_backhoe_pavement_load",
+    "category": "machine_driver"
+  },
+  {
+    "display": "重機運転者_ロードミリングマシーン",
+    "label": "role_driver_roadmillingmachine",
+    "category": "machine_driver"
+  },
+  {
+    "display": "重機運転者_ローラー",
+    "label": "role_driver_roller",
+    "category": "machine_driver"
+  },
+  {
+    "display": "重機運転者_大型タイヤローラー",
+    "label": "role_driver_tire_roller_large",
+    "category": "machine_driver"
+  },
+  {
+    "display": "黒板、キャプションボード",
+    "label": "caption_board",
+    "category": "sign_board"
+  },
+  {
+    "display": "規制看板",
+    "label": "notice_sign_board",
+    "category": "sign_board"
+  },
+  {
+    "display": "標尺（砕石厚測定）",
+    "label": "new_al_rod_soil_thickness",
+    "category": "sign_board"
+  },
+  {
+    "display": "表層路面",
+    "label": "surface_pavement",
+    "category": "surface"
+  },
+  {
+    "display": "路盤面",
+    "label": "surface_crushed_stone",
+    "category": "surface"
+  },
+  {
+    "display": "標尺（既設舗装厚）",
+    "label": "new_al_rod_pavement_thickness",
+    "category": "sign_board"
+  },
+  {
+    "display": "4tダンプ（Asガラ積載状態）",
+    "label": "truck_4t_loading_crushed_asphalt",
+    "category": "machine"
+  },
+  {
+    "display": "作業者_安全訓練",
+    "label": "role_worker_safety_training",
+    "category": "worker"
+  },
+  {
+    "display": "作業者_養生砂清掃",
+    "label": "role_worker_sand_cleaning",
+    "category": "未分類"
+  },
+  {
+    "display": "養生砂面",
+    "label": "surface_covered_sand",
+    "category": "surface"
+  },
+  {
+    "display": "乳剤散布面",
+    "label": "surface_emulsion",
+    "category": "surface"
+  },
+  {
+    "display": "管理ボード、出来形",
+    "label": "caption_board_dekigata",
+    "category": "sign_board"
+  },
+  {
+    "display": "管理ボード、温度管理",
+    "label": "caption_board_thermometer",
+    "category": "sign_board"
+  }
+]
