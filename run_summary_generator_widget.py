@@ -53,7 +53,7 @@ if __name__ == "__main__":
             sys.exit(1)
         sys.exit(p.exitcode)
 
-from summary_generator_widget import SummaryGeneratorWidget
+from src.summary_generator_widget import SummaryGeneratorWidget
 from PyQt6.QtWidgets import QApplication
 
 if __name__ == "__main__":

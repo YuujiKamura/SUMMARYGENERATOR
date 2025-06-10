@@ -8,8 +8,54 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QFormLayout, QLineEdit, QPushButton, 
     QHBoxLayout, QComboBox, QSpinBox, QFileDialog, QMessageBox
 )
-from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtCore import pyqtSignal, Qt, QThread, pyqtSlot
 from .common import create_model_combo, create_progress_bar, create_log_text
+from src.utils.path_manager import path_manager
+from .detect_result_widget import DetectResultWidget
+import os
+import csv
+
+class YoloPredictThread(QThread):
+    output = pyqtSignal(str)
+    finished = pyqtSignal(int, str)
+    def __init__(self, model_path, image_dir, conf, parent=None):
+        super().__init__(parent)
+        self.model_path = model_path
+        self.image_dir = image_dir
+        self.conf = conf
+    def run(self):
+        try:
+            from ultralytics import YOLO
+            import os
+            self.output.emit(f"モデル: {self.model_path}\n画像フォルダ: {self.image_dir}\n信頼度閾値: {self.conf}")
+            model = YOLO(self.model_path)
+            results = model.predict(source=self.image_dir, conf=self.conf, save=True, show=False)
+            # 結果保存先ディレクトリ取得（resultsはリスト）
+            if results and hasattr(results[0], 'save_dir'):
+                save_dir = str(results[0].save_dir)
+            else:
+                save_dir = 'runs/detect/predict'
+            self.output.emit(f"推論結果保存先: {save_dir}")
+            # 検出結果をCSVで保存
+            csv_path = os.path.join(save_dir, 'predict_results.csv')
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(['image', 'class_id', 'class_name', 'confidence', 'xmin', 'ymin', 'xmax', 'ymax'])
+                for r in results:
+                    img_name = os.path.basename(r.path) if hasattr(r, 'path') else ''
+                    names = r.names if hasattr(r, 'names') else {}
+                    if hasattr(r, 'boxes') and r.boxes is not None:
+                        for box in r.boxes:
+                            cls_id = int(box.cls[0]) if hasattr(box, 'cls') else -1
+                            conf = float(box.conf[0]) if hasattr(box, 'conf') else 0.0
+                            xyxy = box.xyxy[0].tolist() if hasattr(box, 'xyxy') else [0,0,0,0]
+                            class_name = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else str(cls_id)
+                            writer.writerow([img_name, cls_id, class_name, conf, *xyxy])
+            self.output.emit(f"検出結果CSV: {csv_path}")
+            self.finished.emit(0, save_dir)
+        except Exception as e:
+            self.output.emit(f"推論エラー: {e}")
+            self.finished.emit(1, str(e))
 
 class YoloPredictWidget(QWidget):
     """YOLO推論用のウィジェット。モデル・画像フォルダ・信頼度閾値を指定し、推論処理を開始できる。"""
@@ -80,25 +126,31 @@ class YoloPredictWidget(QWidget):
         self.refresh_models()
 
     def refresh_models(self):
-        """利用可能なYOLOモデルを更新"""
+        """利用可能なYOLOモデルを更新（パスマネージャー経由でsrc/datasets配下の自作モデルも含める）"""
         self.model_combo.clear()
         from pathlib import Path
+        # 公式プリセット
         model_files = [
             "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolo11n.pt"
         ]
+        # 公式プリセットのパス候補
         for model_file in model_files:
             model_paths = [
                 Path.cwd() / model_file,
-                Path.cwd() / "yolo" / model_file,
-                Path.cwd() / "models" / model_file,
+                path_manager.yolo_model_dir / model_file,
+                path_manager.models_dir / model_file,
                 Path.home() / ".yolo" / "models" / model_file
             ]
             for model_path in model_paths:
                 if model_path.exists():
-                    self.model_combo.addItem(model_file, str(model_path))
+                    self.model_combo.addItem(f"{model_file} (公式/共通)", str(model_path))
                     break
-            else:
-                self.model_combo.addItem(f"{model_file} (見つかりません)", model_file)
+        # src/datasets配下の自作モデル（best.pt, last.pt）を再帰的に探索
+        datasets_dir = path_manager.project_root / "datasets"
+        for dataset_dir in datasets_dir.glob("yolo_dataset_all_*/train_run/exp/weights"):
+            for pt_file in dataset_dir.glob("*.pt"):
+                label = f"{pt_file.parent.parent.parent.parent.name}/{pt_file.name} (自作)"
+                self.model_combo.addItem(label, str(pt_file))
 
     def select_image_dir(self):
         """画像フォルダ選択ダイアログ"""
@@ -122,17 +174,48 @@ class YoloPredictWidget(QWidget):
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)
         self.log_text.clear()
-        self.prediction_started.emit(model_path, image_dir, conf)
+        # self.prediction_started.emit(model_path, image_dir, conf)  # ← 旧シグナルは使わない
+        # サブスレッドで推論実行
+        self._thread = YoloPredictThread(model_path, image_dir, conf)
+        self._thread.output.connect(self.on_prediction_output)
+        self._thread.finished.connect(self.on_prediction_finished)
+        self._thread.start()
 
+    @pyqtSlot(str)
     def on_prediction_output(self, msg):
-        """推論進捗出力"""
         self.log_text.append(msg)
 
+    @pyqtSlot(int, str)
     def on_prediction_finished(self, return_code, result):
-        """推論完了時の処理"""
         self.predict_btn.setEnabled(True)
         self.progress_bar.setVisible(False)
         if return_code == 0:
-            self.log_text.append("推論が完了しました")
+            self.log_text.append(f"推論が完了しました\n結果フォルダ: {result}")
+            # --- 推論結果CSVをパースしてDetectResultWidgetで可視化 ---
+            csv_path = os.path.join(result, 'predict_results.csv')
+            if os.path.exists(csv_path):
+                image_paths = []
+                bbox_dict = {}
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        img = row['image']
+                        img_path = os.path.join(result, 'labels', '..', img) if not os.path.isabs(img) else img
+                        bbox = [float(row['xmin']), float(row['ymin']), float(row['xmax']), float(row['ymax'])]
+                        det = {
+                            'bbox': bbox,
+                            'class_name': row['class_name'],
+                            'confidence': float(row['confidence'])
+                        }
+                        if img_path not in bbox_dict:
+                            bbox_dict[img_path] = []
+                            image_paths.append(img_path)
+                        bbox_dict[img_path].append(det)
+                # DetectResultWidgetを表示
+                self.result_widget = DetectResultWidget()
+                self.result_widget.set_images(image_paths, bbox_dict)
+                self.result_widget.show()
+            else:
+                self.log_text.append(f"[警告] predict_results.csvが見つかりません: {csv_path}")
         else:
-            self.log_text.append(f"推論に失敗しました (コード: {return_code})")
+            self.log_text.append(f"推論に失敗しました (コード: {return_code})\n{result}")

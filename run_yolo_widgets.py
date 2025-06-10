@@ -11,8 +11,8 @@ from src.widgets.yolo_dataset_convert_widget import YoloDatasetConvertWidget
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     # 起動したいウィジェットを選択
-    # win = YoloPredictWidget()
+    win = YoloPredictWidget()
     # win = YoloTrainWidget()
-    win = YoloDatasetConvertWidget()
+    # win = YoloDatasetConvertWidget()
     win.show()
     sys.exit(app.exec())

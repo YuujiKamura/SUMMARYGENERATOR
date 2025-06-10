@@ -1,12 +1,12 @@
 """
 SummaryDataService: サマリー生成用のデータサービス
 """
-from summarygenerator.utils.image_list_utils import filter_and_sort_entries
-from summarygenerator.utils.summary_generator import match_image_to_records
-from summarygenerator.utils.records_loader import load_records_from_json
+from src.utils.image_list_utils import filter_and_sort_entries
+from src.utils.summary_generator import match_image_to_records
+from src.utils.records_loader import load_records_from_json
 from pathlib import Path
-from summarygenerator.utils.chain_record_utils import ChainRecord
-from summarygenerator.utils.image_entry import ImageEntry, ImageEntryList
+from src.utils.chain_record_utils import ChainRecord
+from src.utils.image_entry import ImageEntry, ImageEntryList
 from typing import Optional, Callable, List, Dict, Any
 import logging
 from collections import defaultdict
@@ -59,7 +59,7 @@ class SummaryDataService:
         print(f"[DEBUG][set_all_entries] thermometer_entries(sorted): {[getattr(e, 'image_path', None) for e in thermometer_entries]}")
         if thermometer_entries:
             print(f"[DEBUG][SummaryDataService] 温度計ロール画像群: {len(thermometer_entries)}件 サイクルマッチング開始")
-            from summarygenerator.utils.thermometer_utils import process_thermometer_records
+            from src.utils.thermometer_utils import process_thermometer_records
             # 各ImageEntryの通常候補を再取得
             candidates_list = [self.get_remarks_for_entry(e) for e in thermometer_entries]
             print(f"[DEBUG][set_all_entries] candidates_list lens: {[len(c) for c in candidates_list]}")
@@ -176,7 +176,7 @@ class SummaryDataService:
         # match_results = match_image_to_remarks(
         #     image_roles, role_mapping, self.cache_dir, records_path=self.records_path, debug_callback=debug_callback
         # )        from summarygenerator.utils.summary_generator import match_image_to_records
-        from summarygenerator.utils.chain_record_utils import find_chain_records_by_roles
+        from src.utils.chain_record_utils import find_chain_records_by_roles
         records = getattr(self.dictionary_manager, 'records', [])
         match_results = match_image_to_records(image_json_dict, records)
         return match_results
@@ -199,7 +199,7 @@ class SummaryDataService:
             _debug(f"[get_remarks_for_entry] No roles determined for {entry.image_path}. Cannot match ChainRecords.")
             return []
         records = getattr(self.dictionary_manager, 'records', []) if self.dictionary_manager else []
-        from summarygenerator.utils.chain_record_utils import find_chain_records_by_roles
+        from src.utils.chain_record_utils import find_chain_records_by_roles
         matched_records = find_chain_records_by_roles(current_image_roles, records)
         _debug(f"[get_remarks_for_entry] Matched ChainRecords: {[r.remarks for r in matched_records]}")
         return matched_records
@@ -217,7 +217,7 @@ class SummaryDataService:
             elif isinstance(val, list):
                 roles = val
         records = getattr(self.dictionary_manager, 'records', []) if self.dictionary_manager else []
-        from summarygenerator.utils.chain_record_utils import find_chain_records_by_roles
+        from src.utils.chain_record_utils import find_chain_records_by_roles
         return find_chain_records_by_roles(roles, records)
 
     def get_image_entry_for_image(self, img_path: str) -> Optional[ImageEntry]:

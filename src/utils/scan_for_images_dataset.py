@@ -1,7 +1,7 @@
 import os
 import json
 import hashlib
-from summarygenerator.utils.path_manager import path_manager
+from src.utils.path_manager import path_manager
 
 OUT_PATH = str(path_manager.scan_for_images_dataset)
 
