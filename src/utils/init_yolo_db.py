@@ -17,7 +17,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS images (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         filename TEXT,
-        image_path TEXT,
+        image_path TEXT UNIQUE,
         taken_at TEXT  -- 撮影日（NULL可）
     )
     """)
@@ -49,6 +49,40 @@ def init_db():
             description TEXT
         )
     ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS chain_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            remarks TEXT,
+            photo_category TEXT,
+            extra_json TEXT
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS image_chain_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            image_id INTEGER,
+            chain_record_id INTEGER,
+            assigned_at TEXT,
+            FOREIGN KEY(image_id) REFERENCES images(id),
+            FOREIGN KEY(chain_record_id) REFERENCES chain_records(id)
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            description TEXT
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS image_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            image_id INTEGER,
+            role_id INTEGER,
+            FOREIGN KEY(image_id) REFERENCES images(id),
+            FOREIGN KEY(role_id) REFERENCES roles(id)
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -62,6 +96,15 @@ def migrate_add_taken_at(conn):
         conn.commit()
     else:
         print('[INFO] imagesテーブルには既にtaken_atカラムがあります')
+
+    # 既存テーブルにUNIQUE制約がなければ追加
+    c.execute("PRAGMA index_list(images)")
+    indexes = [row[1] for row in c.fetchall()]
+    if 'idx_images_image_path' not in indexes:
+        try:
+            c.execute("CREATE UNIQUE INDEX idx_images_image_path ON images(image_path)")
+        except sqlite3.OperationalError:
+            pass
 
 def import_json(conn, json_path):
     with open(json_path, encoding="utf-8") as f:

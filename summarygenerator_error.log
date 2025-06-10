@@ -1,7 +1,12 @@
 Traceback (most recent call last):
-  File "C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\summary_generator_widget.py", line 113, in showEvent
+  File "C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\summary_generator_widget.py", line 114, in showEvent
     self.load_image_list_from_path_manager()
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
   File "C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\summary_generator_widget.py", line 235, in load_image_list_from_path_manager
-    from src.image_data_manager import ImageDataManager
-ModuleNotFoundError: No module named 'src.image_data_manager'
+    self.image_data_manager = ImageDataManager.from_db()
+                              ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\image_data_manager.py", line 22, in from_db
+    images = ImageManager.get_all_images()
+  File "C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\db_manager.py", line 23, in get_all_images
+    cur = conn.execute("SELECT * FROM images")
+sqlite3.OperationalError: no such table: images

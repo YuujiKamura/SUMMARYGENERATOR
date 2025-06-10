@@ -30,6 +30,7 @@ from src.record_matching_utils import match_roles_records_one_stop
 from dataclasses import dataclass, field
 from typing import List, Optional
 from src.image_entry import ImageEntry
+from src.image_data_manager import ImageDataManager
 
 # --- path_managerの初期化 ---
 path_manager = PathManager()
@@ -230,10 +231,8 @@ class SummaryGeneratorWidget(QMainWindow):
         self.load_image_list_from_path_manager()
 
     def load_image_list_from_path_manager(self):
-        json_path = path_manager.current_image_list_json
-        print(f'[LOG] load_image_list_from_path_manager: {json_path}')
-        from src.image_data_manager import ImageDataManager
-        self.image_data_manager = ImageDataManager(json_path, CACHE_DIR)
+        # DBから画像リストを取得
+        self.image_data_manager = ImageDataManager.from_db()
         self.update_image_list()
 
     def on_category_changed(self, idx):
