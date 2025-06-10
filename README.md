@@ -20,6 +20,21 @@
 - `run_yolo_widgets.py` : YOLOデータセット管理ウィジェットの起動
 - `send_prompt.py` : 他AIやプロセスとのプロンプト送受信
 
+## 各種run_*.pyスクリプトの用途
+
+- `run_create_yolo_dataset_from_json.py` : DB登録→YOLOデータセット生成→オーグメント→YOLOv8学習までを一括自動実行するバッチスクリプト（ワンストップ処理）
+- `run_export_yolo_from_db.py` : DBに登録された画像・アノテーションからYOLOデータセット（images/labels）をエクスポートする専用スクリプト
+- `run_init_yolo_db.py` : YOLO用DB（image_preview_cache.db等）の初期化・セットアップ用スクリプト
+- `run_yolo_workflow_cli.py` : コマンドラインからYOLOワークフロー（推論・学習等）を実行するCLIツールのエントリポイント
+- `run_yolo_widgets.py` : PyQtウィジェット（GUI）でYOLO推論・学習・データセット変換などを操作できるGUIアプリの起動スクリプト
+
+### 使い分けの目安
+- **全部自動でやりたい** → `run_create_yolo_dataset_from_json.py`
+- **DB→YOLOデータセットだけ** → `run_export_yolo_from_db.py`
+- **DB初期化** → `run_init_yolo_db.py`
+- **CLIでYOLOワークフロー** → `run_yolo_workflow_cli.py`
+- **GUIでYOLO操作** → `run_yolo_widgets.py`
+
 ## 開発・実行の基本
 
 1. 必要なPythonパッケージをインストール
