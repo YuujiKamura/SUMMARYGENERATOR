@@ -1,0 +1,17 @@
+{
+  "category": "アスファルト混合物温度管理",
+  "value_pairs": [
+    {"label": "工事名", "patterns": [{"pattern": "工事名", "fuzzy": 1}, {"pattern": "工事名称", "fuzzy": 1}], "match_type": "pair", "value_match": "any"},
+    {"label": "日付", "patterns": [{"pattern": "日付", "fuzzy": 1}, {"pattern": "撮影日", "fuzzy": 1}], "match_type": "pair", "value_match": "date"},
+    {"label": "台数", "patterns": [{"pattern": "台数", "fuzzy": 1}], "match_type": "pair", "value_match": "any"},
+    {"label": "材料名", "patterns": [{"pattern": "材料名", "fuzzy": 1}], "match_type": "pair", "value_match": "any"},
+    {"label": "到着温度", "patterns": [{"pattern": "到着温度", "fuzzy": 1}], "match_type": "pair", "value_match": "number_unit"},
+    {"label": "敷均し温度", "patterns": [{"pattern": "敷均し温度", "fuzzy": 1}], "match_type": "pair", "value_match": "number_unit"},
+    {"label": "初期締固め前温度", "patterns": [{"pattern": "初期締固め前温度", "fuzzy": 1}], "match_type": "pair", "value_match": "number_unit"},
+    {"label": "開放温度", "patterns": [{"pattern": "開放温度", "fuzzy": 1}], "match_type": "pair", "value_match": "number_unit"}
+  ],
+  "options": {
+    "ignore_space": true,
+    "case_sensitive": false
+  }
+} 

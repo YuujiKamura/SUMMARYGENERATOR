@@ -4,6 +4,7 @@ YOLO正規化xywh <-> 絶対xyxy座標変換ユーティリティ
 """
 from typing import Tuple
 
+
 def xywh_norm_to_xyxy_abs(
     x: float, y: float, w: float, h: float, img_w: int, img_h: int
 ) -> Tuple[float, float, float, float]:
@@ -21,24 +22,18 @@ def xywh_norm_to_xyxy_abs(
     y2 = cy + bh / 2
     return x1, y1, x2, y2
 
-def xyxy_abs_to_xywh_norm(
-    x1: float, y1: float, x2: float, y2: float, img_w: int, img_h: int
-) -> Tuple[float, float, float, float]:
-    """
-    画像サイズ基準の絶対座標(x1, y1, x2, y2)を
-    YOLO形式の正規化xywh(bbox中心・幅・高さ: 0.0-1.0)に変換する。
-    """
-    bw = x2 - x1
-    bh = y2 - y1
-    cx = x1 + bw / 2
-    cy = y1 + bh / 2
-    x = cx / img_w
-    y = cy / img_h
-    w = bw / img_w
-    h = bh / img_h
-    return x, y, w, h
+
+
+def xyxy_abs_to_xywh_norm(x1, y1, x2, y2, img_w, img_h):
+    x_c = (x1 + x2) / 2.0 / img_w
+    y_c = (y1 + y2) / 2.0 / img_h
+    w = abs(x2 - x1) / img_w
+    h = abs(y2 - y1) / img_h
+    return x_c, y_c, w, h
+
 
 # --- テスト関数 ---
+
 def _test_bbox_convert():
     img_w, img_h = 1280, 960
     # 例: 画像中央に幅320,高さ240のbbox
@@ -55,6 +50,7 @@ def _test_bbox_convert():
     assert abs(w_ - w) < 1e-6
     assert abs(h_ - h) < 1e-6
     print("bbox_convert.py テストOK")
+
 
 if __name__ == "__main__":
     _test_bbox_convert()

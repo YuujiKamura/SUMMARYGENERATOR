@@ -1,0 +1,4 @@
+path: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\datasets\yolo_dataset_all_1_20250610_141519
+train: images/train
+val: images/val
+names: []

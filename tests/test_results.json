@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-05-05 10:51:56",
+  "tests": {
+    "simplest_test": {
+      "success": false,
+      "timestamp": "2025-05-05 10:51:57"
+    },
+    "mini_test": {
+      "success": false,
+      "timestamp": "2025-05-05 10:52:00"
+    },
+    "e2e_save_load": {
+      "success": false,
+      "timestamp": "2025-05-05 10:52:02"
+    },
+    "e2e_basic_workflow": {
+      "success": false,
+      "timestamp": "2025-05-05 10:52:02"
+    },
+    "e2e_resize_box": {
+      "success": false,
+      "timestamp": "2025-05-05 10:52:02"
+    }
+  },
+  "summary": {
+    "total": 5,
+    "success": 0,
+    "failed": 5
+  }
+}

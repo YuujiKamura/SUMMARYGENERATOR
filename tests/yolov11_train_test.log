@@ -1,0 +1,18 @@
+2025-05-04 10:07:10,844 - INFO - YOLOv11トレーニングテストを開始します
+2025-05-04 10:07:10,845 - INFO - モデル: yolo/yolov11n.pt
+2025-05-04 10:07:10,845 - INFO - データセット: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\PhotoCategorizer\dataset\dataset.yaml
+2025-05-04 10:07:10,845 - INFO - エポック数: 1
+2025-05-04 10:07:10,845 - INFO - 出力名: test_yolov11_1746320830
+2025-05-04 10:07:10,846 - INFO - データセット検証を開始: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\PhotoCategorizer\dataset\dataset.yaml
+2025-05-04 10:07:10,848 - INFO - データセット検証成功: 画像=104枚, ラベル=52個
+2025-05-04 10:07:10,849 - INFO - トレーニングスレッドを開始しました
+2025-05-04 10:07:10,850 - INFO - [YOLO] トレーニングを開始します:
+2025-05-04 10:07:10,850 - INFO - [YOLO]   モデル: yolo/yolov11n.pt
+2025-05-04 10:07:10,850 - INFO - [YOLO]   データ: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\PhotoCategorizer\dataset\dataset.yaml
+2025-05-04 10:07:10,850 - INFO - [YOLO]   エポック数: 1
+2025-05-04 10:07:10,851 - INFO - [YOLO]   出力先: runs/train/test_yolov11_1746320830
+2025-05-04 10:07:10,851 - INFO - [YOLO]   YOLOv11モデルを使用します
+2025-05-04 10:07:10,851 - INFO - [YOLO] 
+2025-05-04 10:07:11,560 - INFO - [YOLO] [エラー] トレーニング中に例外が発生しました: [Errno 2] No such file or directory: 'yolo\\yolov11n.pt'
+2025-05-04 10:07:11,562 - INFO - トレーニングがエラーで終了しました（コード: 1）
+2025-05-04 10:07:12,065 - ERROR - === テスト失敗 ===
