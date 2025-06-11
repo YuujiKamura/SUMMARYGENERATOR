@@ -195,8 +195,8 @@ class SummaryDataService:
         records = [ChainRecord.from_dict(r) for r in ChainRecordManager.get_all_chain_records()]
         step_log('chain_records_match', [r.__dict__ for r in records])
         match_results = match_image_to_records(image_json_dict, records)
-        # S4: マッチング結果
-        step_log('S4_match_results', match_results)
+        # S3: マッチング結果
+        step_log('S3_match_results', match_results)
         return match_results
 
     def get_remarks_for_entry(self, entry: 'ImageEntry', debug_callback: Optional[Callable[[str, str], None]] = None) -> List[ChainRecord]:

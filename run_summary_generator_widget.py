@@ -7,35 +7,26 @@ import threading
 import time
 import multiprocessing
 
+# 例外フック（logs/配下に出力）
 def excepthook(type, value, tb):
-    with open("summarygenerator_error.log", "w", encoding="utf-8") as f:
+    logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+    error_log_path = os.path.join(logs_dir, "summarygenerator_error.log")
+    with open(error_log_path, "w", encoding="utf-8") as f:
         traceback.print_exception(type, value, tb, file=f)
     sys.__excepthook__(type, value, tb)
 sys.excepthook = excepthook
 
-# src配下に移動した場合のパス調整
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, 'src'))
-sys.path.insert(0, project_root)
-
-# DBリセット
-from src.db_manager import reset_all_tables, import_image_preview_cache_json
-from src.utils.path_manager import PathManager
 from src.services.summary_data_service import SummaryDataService
-# DB・リソース初期化
-SummaryDataService().reset_all_resources()
-# パスマネージャー経由でJSONパス取得しDB登録
-pm = PathManager()
-import_image_preview_cache_json(json_path=pm.image_preview_cache_master)
+from src.utils.path_manager import PathManager
+from src.db_manager import import_image_preview_cache_json
 
-print(f"[DEBUG] sys.path: {sys.path}")
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--cli", action="store_true", help="CLIモードで起動")
-parser.add_argument("--create-yolo-dataset", action="store_true", help="YOLOデータセット作成")
-parser.add_argument("--json", type=str, help="画像リストJSONのパス")
-parser.add_argument("--out", type=str, help="出力先ディレクトリ")
-args, unknown = parser.parse_known_args()
+def initialize_resources():
+    # DB・リソース初期化
+    SummaryDataService().reset_all_resources()
+    # 画像プレビューキャッシュもDB登録
+    pm = PathManager()
+    import_image_preview_cache_json(json_path=pm.image_preview_cache_master)
 
 def cli_main(json_path, out):
     from summarygenerator.utils.yolo_dataset_actions import YoloDatasetActionHandler, ErrorReporter
@@ -45,7 +36,16 @@ def cli_main(json_path, out):
     except Exception:
         sys.exit(1)
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cli", action="store_true", help="CLIモードで起動")
+    parser.add_argument("--create-yolo-dataset", action="store_true", help="YOLOデータセット作成")
+    parser.add_argument("--json", type=str, help="画像リストJSONのパス")
+    parser.add_argument("--out", type=str, help="出力先ディレクトリ")
+    args, unknown = parser.parse_known_args()
+
+    initialize_resources()
+
     if args.cli and args.create_yolo_dataset:
         from summarygenerator.utils.path_manager import PathManager
         from summarygenerator.utils.yolo_dataset_actions import ErrorReporter
@@ -64,12 +64,13 @@ if __name__ == "__main__":
             p.join()
             sys.exit(1)
         sys.exit(p.exitcode)
-
-from src.summary_generator_widget import SummaryGeneratorWidget
-from PyQt6.QtWidgets import QApplication
+    else:
+        from src.summary_generator_widget import SummaryGeneratorWidget
+        from PyQt6.QtWidgets import QApplication
+        app = QApplication(sys.argv)
+        w = SummaryGeneratorWidget()
+        w.show()
+        sys.exit(app.exec())
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    w = SummaryGeneratorWidget()
-    w.show()
-    sys.exit(app.exec())
+    main()
