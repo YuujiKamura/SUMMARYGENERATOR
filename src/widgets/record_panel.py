@@ -62,9 +62,8 @@ class RecordPanel(QWidget):
         self.debug_text.setPlainText(text)
 
     def update_records(self, matched_records, remarks_to_record=None):
-        # 上位3件まで表示
-        top_records = matched_records[:3] if matched_records else []
-        self.record_list_widget.update_records(top_records)
+        # 全件表示に修正
+        self.record_list_widget.update_records(matched_records if matched_records else [])
 
     def setRowCount(self, n):
         self.record_list_widget.setRowCount(n)

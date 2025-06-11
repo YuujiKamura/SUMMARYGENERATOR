@@ -1,26 +1,26 @@
-# YOLOウィジェット共通部品（PhotoCategorizerからコピー）
+#!/usr/bin/env python3
+"""
+YOLOウィジェット共通部品
+"""
 from pathlib import Path
 from PyQt6.QtWidgets import QComboBox, QProgressBar, QTextEdit
 
 def create_model_combo(parent=None):
-    """YOLOモデル選択用コンボボックスを生成し、モデルリストをセットする"""
+    """src/yolo, src/datasets配下の.ptモデルを再帰的に探索し、コンボボックスにセット"""
+    from pathlib import Path
+    from PyQt6.QtWidgets import QComboBox
+    import os
     combo = QComboBox(parent)
-    model_files = [
-        "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolo11n.pt"
-    ]
-    for model_file in model_files:
-        model_paths = [
-            Path.cwd() / model_file,
-            Path.cwd() / "yolo" / model_file,
-            Path.cwd() / "models" / model_file,
-            Path.home() / ".yolo" / "models" / model_file
-        ]
-        for model_path in model_paths:
-            if model_path.exists():
-                combo.addItem(model_file, str(model_path))
-                break
-        else:
-            combo.addItem(f"{model_file} (見つかりません)", model_file)
+    base_dirs = [Path(os.path.dirname(__file__)).parent / "yolo", Path(os.path.dirname(__file__)).parent / "datasets"]
+    seen = set()
+    for base in base_dirs:
+        if base.exists():
+            for pt in base.rglob("*.pt"):
+                if pt.name not in seen:
+                    combo.addItem(pt.name, str(pt))
+                    seen.add(pt.name)
+    if combo.count() == 0:
+        combo.addItem("(モデルが見つかりません)", "")
     return combo
 
 def create_progress_bar(parent=None):

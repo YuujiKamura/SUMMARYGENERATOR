@@ -1,49 +1,0 @@
-[34m[1mtrain: [0mScanning C:\Users\yuuj[0m[34m[1mtrain: [0mScanning C:\Users\yuuj[0m
-C:\Users\yuuji\AppData\Local\Programs\Python\Python313\Lib\site-packages\torch\utils\data\dataloader.py:665: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
-  warnings.warn(warn_msg)
-[34m[1mval: [0mScanning C:\Users\yuuji\[0m[34m[1mval: [0mScanning C:\Users\yuuji\[0m
-C:\Users\yuuji\AppData\Local\Programs\Python\Python313\Lib\site-packages\torch\utils\data\dataloader.py:665: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
-  warnings.warn(warn_msg)
-  0%|          | 0/3 [00:00<?       1/20         0G     0.       1/20         0G     0.       1/20         0G      1       1/20         0G      1       1/20         0G     0.       1/20         0G     0.       1/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?       2/20         0G     0.       2/20         0G     0.       2/20         0G      0       2/20         0G      0       2/20         0G     0.       2/20         0G     0.       2/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?       3/20         0G              3/20         0G              3/20         0G      0       3/20         0G      0       3/20         0G      0       3/20         0G      0       3/20         0G      0
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?       4/20         0G     0.       4/20         0G     0.       4/20         0G     0.       4/20         0G     0.       4/20         0G      0       4/20         0G      0       4/20         0G      0
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?       5/20         0G     0.       5/20         0G     0.       5/20         0G      0       5/20         0G      0       5/20         0G     0.       5/20         0G     0.       5/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?       6/20         0G     0.       6/20         0G     0.       6/20         0G     0.       6/20         0G     0.       6/20         0G     0.       6/20         0G     0.       6/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?       7/20         0G     0.       7/20         0G     0.       7/20         0G     0.       7/20         0G     0.       7/20         0G     0.       7/20         0G     0.       7/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?       8/20         0G     0.       8/20         0G     0.       8/20         0G      0       8/20         0G      0       8/20         0G     0.       8/20         0G     0.       8/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?       9/20         0G     0.       9/20         0G     0.       9/20         0G     0.       9/20         0G     0.       9/20         0G     0.       9/20         0G     0.       9/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?      10/20         0G     0.      10/20         0G     0.      10/20         0G     0.      10/20         0G     0.      10/20         0G     0.      10/20         0G     0.      10/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-C:\Users\yuuji\AppData\Local\Programs\Python\Python313\Lib\site-packages\torch\utils\data\dataloader.py:665: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
-  warnings.warn(warn_msg)
-  0%|          | 0/3 [00:00<?      11/20         0G     0.      11/20         0G     0.      11/20         0G      0      11/20         0G      0      11/20         0G     0.      11/20         0G     0.      11/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?      12/20         0G     0.      12/20         0G     0.      12/20         0G     0.      12/20         0G     0.      12/20         0G     0.      12/20         0G     0.      12/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?      13/20         0G     0.      13/20         0G     0.      13/20         0G     0.      13/20         0G     0.      13/20         0G     0.      13/20         0G     0.      13/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?      14/20         0G     0.      14/20         0G     0.      14/20         0G     0.      14/20         0G     0.      14/20         0G     0.      14/20         0G     0.      14/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?      15/20         0G     0.      15/20         0G     0.      15/20         0G     0.      15/20         0G     0.      15/20         0G     0.      15/20         0G     0.      15/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?      16/20         0G     0.      16/20         0G     0.      16/20         0G      0      16/20         0G      0      16/20         0G     0.      16/20         0G     0.      16/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?      17/20         0G     0.      17/20         0G     0.      17/20         0G     0.      17/20         0G     0.      17/20         0G     0.      17/20         0G     0.      17/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?      18/20         0G     0.      18/20         0G     0.      18/20         0G     0.      18/20         0G     0.      18/20         0G     0.      18/20         0G     0.      18/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?      19/20         0G      0      19/20         0G      0      19/20         0G     0.      19/20         0G     0.      19/20         0G     0.      19/20         0G     0.      19/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-  0%|          | 0/3 [00:00<?      20/20         0G     0.      20/20         0G     0.      20/20         0G      0      20/20         0G      0      20/20         0G     0.      20/20         0G     0.      20/20         0G     0.
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im
-                 Class     Im                 Class     Im                 Class     Im                 Class     Im

@@ -9,4 +9,4 @@ def group_roles_by_category(roles):
     for r in roles:
         cat = r.get('category', '未分類') or '未分類'
         cats.setdefault(cat, []).append(r)
-    return cats
+    return cats 

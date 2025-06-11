@@ -6,6 +6,7 @@ import os
 import string
 import random
 from src.utils.bbox_normalizer import convert_bbox_to_yolo
+from src.utils.path_manager import PathManager
 
 DB_PATH = Path(__file__).parent / 'model_training_cache.db'
 
@@ -58,12 +59,30 @@ class YoloDatasetBuilder:
         self.records = fetch_all_records()
         self.dump_records = []
         self.debug_log_path = Path(__file__).parent / 'db_to_yolo_dataset_debug.log'
-        # 1. 画像ごとのbbox情報を一時保存
         self.image_bboxes = []  # [{filename, image_path, bboxes: [dict]}]
         self.class_names_set = set()
         self.class_name_to_id = dict()
         self.id_to_class_name = dict()
         self.class_names = []
+        # --- preset_roles.jsonのロード ---
+        # まずsrc/data/preset_roles.jsonを優先的に探す
+        pm = PathManager()
+        preset_roles_candidates = [
+            Path(__file__).parent / 'preset_roles.json',
+            Path(__file__).parent.parent / 'preset_roles.json',
+            Path(__file__).parent.parent / 'data' / 'preset_roles.json',
+            pm.preset_roles if hasattr(pm, 'preset_roles') else None
+        ]
+        self.preset_roles_path = None
+        for cand in preset_roles_candidates:
+            if cand and Path(cand).exists():
+                self.preset_roles_path = Path(cand)
+                break
+        if not self.preset_roles_path:
+            raise FileNotFoundError('preset_roles.jsonが見つかりません。src/data/preset_roles.json等に配置してください。')
+        with open(self.preset_roles_path, encoding="utf-8") as f:
+            self.preset_roles = json.load(f)
+        self.preset_labels = [entry["label"] for entry in self.preset_roles if entry.get("label")]
 
     def process(self):
         # 1. 全画像・全bboxからクラス名を抽出
@@ -79,8 +98,9 @@ class YoloDatasetBuilder:
                     cname = bbox.get('role') or bbox.get('label')
                     if cname:
                         self.class_names_set.add(cname)
-        # 2. クラス名→ID割当
-        self.class_names = sorted(self.class_names_set)
+        # 2. preset_roles.json順で、実データに含まれるクラスのみを抽出
+        used_labels = [label for label in self.preset_labels if label in self.class_names_set]
+        self.class_names = used_labels if used_labels else [self.preset_labels[0] if self.preset_labels else 'class0']
         self.class_name_to_id = {name: i for i, name in enumerate(self.class_names)}
         self.id_to_class_name = {i: name for i, name in enumerate(self.class_names)}
         # 3. YOLOデータセット書き出し
@@ -121,7 +141,7 @@ class YoloDatasetBuilder:
             img_result['img_w'] = img_w
             img_result['img_h'] = img_h
             if img_w <= 1 or img_h <= 1:
-                with open(self.debug_log_path, 'a', encoding='utf-8') as debugf:
+                with open(self.debug_log_path, 'w', encoding='utf-8') as debugf:
                     debugf.write(f"[ERROR] 画像サイズ異常: filename={filename} img_w={img_w} img_h={img_h} path={dst_img}\n")
                 print(f"[ERROR] 画像サイズ異常: filename={filename} img_w={img_w} img_h={img_h} path={dst_img}")
             label_path = self.labels_dir / (src_img.stem + '.txt')
@@ -138,11 +158,31 @@ class YoloDatasetBuilder:
                         class_name = None
                         if isinstance(bbox, dict):
                             class_name = bbox.get('role') or bbox.get('label')
-                        if not class_name:
-                            class_name = self.class_names[0] if self.class_names else 'class0'
-                        class_id = self.class_name_to_id.get(class_name, 0)
+                        if not class_name or class_name not in self.class_name_to_id:
+                            bbox_info['status'] = 'skip'
+                            bbox_info['error'] = f'クラス名未定義: {class_name}'
+                            img_result['bboxes'].append(bbox_info)
+                            continue
+                        class_id = self.class_name_to_id[class_name]
                         # --- bbox変換 ---
-                        class_id_yolo, x, y, w, h = convert_bbox_to_yolo(bbox, img_w, img_h)
+                        if isinstance(bbox, dict):
+                            box = bbox.get('bbox') or bbox.get('xyxy')
+                        elif isinstance(bbox, (list, tuple)) and len(bbox) >= 5:
+                            box = bbox[:4]
+                        else:
+                            box = None
+                        if box and len(box) == 4:
+                            x_min, y_min, x_max, y_max = map(float, box)
+                        else:
+                            bbox_info['status'] = 'skip'
+                            bbox_info['error'] = 'bbox座標不正'
+                            img_result['bboxes'].append(bbox_info)
+                            continue
+                        # YOLO正規化
+                        x = (x_min + x_max) / 2 / img_w
+                        y = (y_min + y_max) / 2 / img_h
+                        w = (x_max - x_min) / img_w
+                        h = (y_max - y_min) / img_h
                         if w <= 0 or h <= 0:
                             bbox_info['status'] = 'skip'
                             bbox_info['error'] = f'幅または高さが0以下: w={w}, h={h}'
@@ -176,8 +216,18 @@ class YoloDatasetBuilder:
         logs_dir = Path(__file__).parent.parent.parent / 'logs'
         logs_dir.mkdir(exist_ok=True)
         dump_path = logs_dir / '02_yolo_dataset_dump.json'
+        # クラスリストを先頭に含める
+        dump_data = {
+            'class_names': self.class_names,
+            'records': self.dump_records
+        }
         with open(dump_path, 'w', encoding='utf-8') as f:
-            json.dump(self.dump_records, f, ensure_ascii=False, indent=2)
+            json.dump(dump_data, f, ensure_ascii=False, indent=2)
+        # クラス名リストだけのダンプも出力（インデックス付き）
+        class_names_path = logs_dir / '02_yolo_class_names.json'
+        class_names_with_index = [f"{i}: {name}" for i, name in enumerate(self.class_names)]
+        with open(class_names_path, 'w', encoding='utf-8') as f:
+            json.dump(class_names_with_index, f, ensure_ascii=False, indent=2)
 
 def main(out_dir=None):
     builder = YoloDatasetBuilder(out_dir)

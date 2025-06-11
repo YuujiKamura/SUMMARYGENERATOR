@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt6.QtCore import pyqtSignal
 from .image_list_widget import ImageListWidget
+from src.utils.image_entry import ImageEntry
 
 class ImageListPanel(QWidget):
     """

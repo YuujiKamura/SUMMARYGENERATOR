@@ -1,3 +1,43 @@
 {
-  "_comment": "コピー元: ../../data/dictionaries/default_records.json"
+  "photo_categories": [
+    "着手前及び完成写真（既済部分写真等含む）",
+    "施工状況写真",
+    "安全管理写真",
+    "使用材料写真",
+    "品質管理写真",
+    "出来形管理写真",
+    "災害写真",
+    "事故写真",
+    "その他（公害、環境、補償等）"
+  ],
+  "records": [
+    "records/rec_0001.json",
+    "records/rec_0002.json",
+    "records/rec_0003.json",
+    "records/rec_0004.json",
+    "records/rec_0005.json",
+    "records/rec_0006.json",
+    "records/rec_0007.json",
+    "records/rec_0008.json",
+    "records/rec_0009.json",
+    "records/rec_0010.json",
+    "records/rec_0011.json",
+    "records/rec_0012.json",
+    "records/rec_0013.json",
+    "records/rec_0014.json",
+    "records/rec_0015.json",
+    "records/rec_0016.json",
+    "records/rec_0017.json",
+    "records/rec_0018.json",
+    "records/rec_0019.json",
+    "records/rec_0020.json",
+    "records/rec_0021.json",
+    "records/rec_0022.json",
+    "records/rec_0023.json",
+    "records/rec_0024.json",
+    "records/rec_0025.json",
+    "records/rec_0026.json",
+    "records/rec_0027.json",
+    "records/rec_0028.json"
+  ]
 }

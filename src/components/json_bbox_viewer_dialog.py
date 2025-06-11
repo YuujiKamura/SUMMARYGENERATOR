@@ -1,5 +1,5 @@
-from QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QListWidgetItem, QTextEdit, QTabWidget, QMessageBox
-from QtCore import pyqtSignal
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QListWidgetItem, QTextEdit, QTabWidget, QMessageBox
+from PyQt6.QtCore import pyqtSignal
 import os
 import json
 
@@ -74,4 +74,4 @@ class JsonBboxViewerDialog(QDialog):
     def accept(self):
         if self._modified:
             self.image_json_saved.emit(self.image_path)
-        super().accept()
+        super().accept() 

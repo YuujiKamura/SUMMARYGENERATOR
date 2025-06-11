@@ -7,7 +7,7 @@ from typing import List, Optional, Dict, Any
 from PIL import Image
 import yaml
 import datetime
-from summarygenerator.utils.path_manager import PathManager
+from path_manager import PathManager
 
 def get_default_output_dir():
     now_str = datetime.datetime.now().strftime("%Y%m%d")

@@ -170,32 +170,39 @@ class YoloPredictWidget(QWidget):
         super().closeEvent(event)
 
     def refresh_models(self):
-        """利用可能なYOLOモデルを更新（パスマネージャー経由でsrc/datasets配下の自作モデルも含める）"""
+        """src/yolo, src/datasets配下の.ptモデルを再帰的に探索し、モデルリストを更新"""
         self.model_combo.clear()
         from pathlib import Path
+        import os
         # 公式プリセット
         model_files = [
             "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolo11n.pt"
         ]
-        # 公式プリセットのパス候補
+        seen = set()
+        # 公式モデル
         for model_file in model_files:
             model_paths = [
                 Path.cwd() / model_file,
-                path_manager.yolo_model_dir / model_file,
-                path_manager.models_dir / model_file,
+                Path(os.path.dirname(__file__)).parent / "yolo" / model_file,
+                Path(os.path.dirname(__file__)).parent / "datasets" / model_file,
                 Path.home() / ".yolo" / "models" / model_file
             ]
             for model_path in model_paths:
-                if model_path.exists():
+                if model_path.exists() and str(model_path) not in seen:
                     self.model_combo.addItem(f"{model_file} (公式/共通)", str(model_path))
+                    seen.add(str(model_path))
                     break
-        # src/datasets配下の自作モデル（best.pt, last.pt）を再帰的に探索
-        datasets_dir = path_manager.project_root / "datasets"
-        for dataset_dir in datasets_dir.glob("yolo_dataset_all_*/train_run/exp/weights"):
-            for pt_file in dataset_dir.glob("*.pt"):
-                label = f"{pt_file.parent.parent.parent.parent.name}/{pt_file.name} (自作)"
-                self.model_combo.addItem(label, str(pt_file))
-        # モデルリスト更新後に復元も再実行
+        # src/yolo, src/datasets配下の.ptファイルを再帰的に探索
+        base_dirs = [Path(os.path.dirname(__file__)).parent / "yolo", Path(os.path.dirname(__file__)).parent / "datasets"]
+        for base in base_dirs:
+            if base.exists():
+                for pt in base.rglob("*.pt"):
+                    if str(pt) not in seen:
+                        label = f"{pt.relative_to(base)} (自作)"
+                        self.model_combo.addItem(label, str(pt))
+                        seen.add(str(pt))
+        if self.model_combo.count() == 0:
+            self.model_combo.addItem("(モデルが見つかりません)", "")
         self.restore_settings()
 
     def select_image_dir(self):

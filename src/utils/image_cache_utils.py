@@ -3,11 +3,11 @@ import os
 import json
 import hashlib
 from pathlib import Path
+from src.utils.path_manager import path_manager
 
 def get_image_cache_path(image_path, cache_dir=None):
     if cache_dir is None:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        cache_dir = os.path.abspath(os.path.join(base_dir, "image_preview_cache"))
+        cache_dir = str(path_manager.image_cache_dir)
     os.makedirs(cache_dir, exist_ok=True)
     h = hashlib.sha1(image_path.encode("utf-8")).hexdigest()
     return os.path.join(cache_dir, f"{h}.json")

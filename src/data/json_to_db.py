@@ -38,7 +38,7 @@ def insert_from_json():
     total = 0
     success = 0
     fail = 0
-    with open(log_path, 'w', encoding='utf-8') as logf:  # ← 'a'から'w'に変更
+    with open(log_path, 'w', encoding='utf-8') as logf:
         for entry in data:
             total += 1
             # ここでbboxesの内容をprint/log

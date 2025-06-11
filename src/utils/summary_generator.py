@@ -34,7 +34,9 @@ chain_records = load_chain_records(RECORDS_PATH)
 remarks_to_chain_record = {rec.remarks: rec for rec in chain_records if rec.remarks}
 
 # --- マッピングロジック ---
-logging.basicConfig(level=logging.DEBUG, filename="thermo_mapping_debug.log", filemode="w", encoding="utf-8")
+log_dir = 'logs'
+os.makedirs(log_dir, exist_ok=True)
+logging.basicConfig(level=logging.DEBUG, filename=os.path.join(log_dir, "thermo_mapping_debug.log"), filemode="w", encoding="utf-8")
 logger = logging.getLogger(__name__)
 
 def load_role_mapping():

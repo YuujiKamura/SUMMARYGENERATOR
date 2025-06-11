@@ -1,4 +1,3 @@
-# YOLO学習ウィジェット（PhotoCategorizerからコピー）
 #!/usr/bin/env python3
 """
 YOLO学習ウィジェット
@@ -8,9 +7,9 @@ import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout, QPushButton, QSpinBox, QLineEdit, QFileDialog, QMessageBox, QListWidget, QLabel, QComboBox
 )
-from PyQt6.QtCore import pyqtSignal, QSettings, Qt
+from PyQt6.QtCore import pyqtSignal, QSettings
 import yaml
-from .common import create_model_combo, create_progress_bar, create_log_text
+from src.widgets.common import create_model_combo, create_progress_bar, create_log_text
 
 class YoloTrainWidget(QWidget):
     """YOLO学習用のウィジェット。モデル・データセット・エポック数等を指定し、学習処理を開始できる。"""
@@ -26,28 +25,18 @@ class YoloTrainWidget(QWidget):
     def _setup_ui(self):
         """UI初期化"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
         train_group = QGroupBox("トレーニング設定")
-        train_group.setStyleSheet("QGroupBox { font-weight: bold; }")
-        train_form = QFormLayout()
-        train_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        train_form.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        train_form.setHorizontalSpacing(16)
-        train_form.setVerticalSpacing(8)
+        train_form = QFormLayout(train_group)
         self.model_combo = create_model_combo(self)
         self.model_refresh_btn = QPushButton("更新")
-        self.model_refresh_btn.setFixedWidth(60)
         self.model_refresh_btn.clicked.connect(self.refresh_models)
         model_layout = QHBoxLayout()
         model_layout.addWidget(self.model_combo, 1)
         model_layout.addWidget(self.model_refresh_btn)
         self.dataset_combo = QComboBox()
         self.dataset_refresh_btn = QPushButton("更新")
-        self.dataset_refresh_btn.setFixedWidth(60)
         self.dataset_refresh_btn.clicked.connect(self.refresh_datasets)
         self.dataset_file_btn = QPushButton("ファイルから選択")
-        self.dataset_file_btn.setFixedWidth(100)
         self.dataset_file_btn.clicked.connect(self.select_dataset_file)
         dataset_layout = QHBoxLayout()
         dataset_layout.addWidget(self.dataset_combo, 1)
@@ -56,37 +45,30 @@ class YoloTrainWidget(QWidget):
         self.epochs_spin = QSpinBox()
         self.epochs_spin.setRange(1, 1000)
         self.epochs_spin.setValue(100)
-        self.epochs_spin.setFixedWidth(80)
         self.exp_name_edit = QLineEdit("exp")
         train_form.addRow("モデル:", model_layout)
         train_form.addRow("データセット:", dataset_layout)
         train_form.addRow("エポック数:", self.epochs_spin)
         train_form.addRow("実験名:", self.exp_name_edit)
-        train_group.setLayout(train_form)
         self.train_btn = QPushButton("トレーニング開始")
-        self.train_btn.setMinimumHeight(40)
-        self.train_btn.setStyleSheet("font-size: 16px; font-weight: bold;")
         self.train_btn.clicked.connect(self.start_training)
+        self.train_btn.setMinimumHeight(40)
+        self.progress_bar = create_progress_bar(self)
+        self.log_text = create_log_text(self)
         self.cancel_btn = QPushButton("キャンセル")
         self.cancel_btn.setEnabled(False)
-        self.cancel_btn.setFixedWidth(100)
         self.cancel_btn.clicked.connect(self.cancel_training)
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(self.train_btn)
         btn_layout.addWidget(self.cancel_btn)
-        self.progress_bar = create_progress_bar(self)
-        self.progress_bar.setFixedHeight(18)
-        self.log_text = create_log_text(self)
-        self.log_text.setMinimumHeight(120)
-        self.label_list = QListWidget()
-        self.label_list.setFixedHeight(100)
         layout.addWidget(train_group)
         layout.addLayout(btn_layout)
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.log_text)
+        self.label_list = QListWidget()
+        self.label_list.setFixedHeight(100)
         layout.addWidget(QLabel("ラベル一覧:"))
         layout.addWidget(self.label_list)
-        layout.addStretch(1)
         self.dataset_combo.currentIndexChanged.connect(self.update_label_list)
         self.refresh_models()
         self.refresh_datasets()
@@ -156,7 +138,7 @@ class YoloTrainWidget(QWidget):
         """学習進捗出力"""
         print(msg)
         try:
-            with open("train_progress.log", "a", encoding="utf-8") as log_file:
+            with open("train_progress.log", "w", encoding="utf-8") as log_file:
                 log_file.write(msg + "\n")
         except OSError as err:
             print(f"[LOGファイル書き込みエラー] {err}")
@@ -166,7 +148,7 @@ class YoloTrainWidget(QWidget):
         msg = f"[TRAIN_FINISHED] return_code={return_code}, result={result}"
         print(msg)
         try:
-            with open("train_progress.log", "a", encoding="utf-8") as log_file:
+            with open("train_progress.log", "w", encoding="utf-8") as log_file:
                 log_file.write(msg + "\n")
         except OSError as err:
             print(f"[LOGファイル書き込みエラー] {err}")
@@ -204,4 +186,4 @@ class YoloTrainWidget(QWidget):
                 for idx, value in enumerate(names):
                     self.label_list.addItem(f"{idx}: {value}")
         except (OSError, yaml.YAMLError) as err:
-            self.label_list.addItem(f"ラベル取得エラー: {err}")
+            self.label_list.addItem(f"ラベル取得エラー: {err}") 

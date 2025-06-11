@@ -2,14 +2,12 @@ import pytest
 from src.image_entry import ImageEntry
 from src.utils.chain_record_utils import ChainRecord
 from src.record_matching_utils import match_roles_records_one_stop
+from src.db_manager import ChainRecordManager, init_db
 
 @pytest.fixture
 def sample_records():
-    # remarks, photo_category, rolesを持つ最小限のChainRecordリスト
-    return [
-        ChainRecord(remarks='温度測定', photo_category='品質管理写真', roles=['thermometer']),
-        ChainRecord(remarks='出来形', photo_category='出来形管理写真', roles=['caption_board_dekigata']),
-    ]
+    # DBからChainRecordを取得
+    return [ChainRecord.from_dict(r) for r in ChainRecordManager.get_all_chain_records()]
 
 @pytest.fixture
 def sample_role_mapping():
@@ -18,6 +16,15 @@ def sample_role_mapping():
         '温度測定': {'roles': ['thermometer'], 'match': 'any'},
         '出来形': {'roles': ['caption_board_dekigata'], 'match': 'any'},
     }
+
+@pytest.fixture(autouse=True)
+def setup_db_records():
+    # DBを最新スキーマで初期化
+    init_db()
+    # 必要なChainRecordをDBに投入
+    ChainRecordManager.add_chain_record(remarks='温度測定', photo_category='品質管理写真')
+    ChainRecordManager.add_chain_record(remarks='出来形', photo_category='出来形管理写真')
+    yield
 
 def test_image_entry_from_cache_json_roles(sample_role_mapping, sample_records):
     # rolesが直接与えられる場合

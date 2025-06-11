@@ -18,6 +18,18 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, 'src'))
 sys.path.insert(0, project_root)
 
+# DBリセット
+from src.db_manager import reset_all_tables, import_image_preview_cache_json
+from src.utils.path_manager import PathManager
+from src.services.summary_data_service import SummaryDataService
+# DB・リソース初期化
+SummaryDataService().reset_all_resources()
+# パスマネージャー経由でJSONパス取得しDB登録
+pm = PathManager()
+import_image_preview_cache_json(json_path=pm.image_preview_cache_master)
+
+print(f"[DEBUG] sys.path: {sys.path}")
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--cli", action="store_true", help="CLIモードで起動")
 parser.add_argument("--create-yolo-dataset", action="store_true", help="YOLOデータセット作成")

@@ -45,8 +45,13 @@ def init_db(db_path: Path = DB_PATH):
         c.execute('''
             CREATE TABLE IF NOT EXISTS chain_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                remarks TEXT,
+                location TEXT,
+                controls TEXT,
                 photo_category TEXT,
+                work_category TEXT,
+                type TEXT,
+                subtype TEXT,
+                remarks TEXT,
                 extra_json TEXT
             )
         ''')
@@ -168,11 +173,16 @@ class ChainRecordManager:
             cur = conn.execute("SELECT * FROM chain_records")
             return [dict(row) for row in cur.fetchall()]
     @staticmethod
-    def add_chain_record(remarks: str, photo_category: Optional[str]=None, extra_json: Optional[str]=None) -> int:
-        with DBConnection() as conn:
+    def add_chain_record(location: Optional[str]=None, controls: Optional[list]=None, photo_category: Optional[str]=None, extra_json: Optional[str]=None, db_path=DB_PATH, work_category: Optional[str]=None, type_: Optional[str]=None, subtype: Optional[str]=None, remarks: Optional[str]=None) -> int:
+        # controlsはリスト→JSON文字列
+        controls_json = json.dumps(controls, ensure_ascii=False) if controls is not None else None
+        with DBConnection(db_path) as conn:
             cur = conn.execute(
-                "INSERT INTO chain_records (remarks, photo_category, extra_json) VALUES (?, ?, ?)",
-                (remarks, photo_category, extra_json)
+                """
+                INSERT INTO chain_records (location, controls, photo_category, work_category, type, subtype, remarks, extra_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (location, controls_json, photo_category, work_category, type_, subtype, remarks, extra_json)
             )
             conn.commit()
             return cur.lastrowid
@@ -193,6 +203,38 @@ class ChainRecordManager:
                 (image_id,)
             )
             return [dict(row) for row in cur.fetchall()]
+
+class RoleMappingManager:
+    @staticmethod
+    def get_all_role_mappings(db_path=DB_PATH) -> list:
+        with DBConnection(db_path) as conn:
+            cur = conn.execute("SELECT * FROM role_mappings")
+            return [dict(row) for row in cur.fetchall()]
+
+    @staticmethod
+    def get_role_mapping(role_name: str, db_path=DB_PATH) -> dict:
+        with DBConnection(db_path) as conn:
+            cur = conn.execute("SELECT * FROM role_mappings WHERE role_name = ?", (role_name,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    @staticmethod
+    def add_or_update_role_mapping(role_name: str, mapping_json: str, db_path=DB_PATH) -> int:
+        with DBConnection(db_path) as conn:
+            cur = conn.execute(
+                "INSERT INTO role_mappings (role_name, mapping_json) VALUES (?, ?) ON CONFLICT(role_name) DO UPDATE SET mapping_json=excluded.mapping_json",
+                (role_name, mapping_json)
+            )
+            conn.commit()
+            cur = conn.execute("SELECT id FROM role_mappings WHERE role_name = ?", (role_name,))
+            row = cur.fetchone()
+            return row["id"] if row else None
+
+    @staticmethod
+    def delete_role_mapping(role_name: str, db_path=DB_PATH) -> None:
+        with DBConnection(db_path) as conn:
+            conn.execute("DELETE FROM role_mappings WHERE role_name = ?", (role_name,))
+            conn.commit()
 
 def import_image_preview_cache_json(json_path: Path = JSON_PATH, db_path: Path = DB_PATH):
     init_db(db_path)  # 追加: 必ず初期化
@@ -227,4 +269,15 @@ def import_image_preview_cache_json(json_path: Path = JSON_PATH, db_path: Path =
                         "INSERT INTO bboxes (image_id, cid, cname, conf, x1, y1, x2, y2, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (image_id, cid, cname, conf, x1, y1, x2, y2, role)
                     )
+        conn.commit()
+
+def reset_all_tables(db_path=DB_PATH):
+    with DBConnection(db_path) as conn:
+        conn.execute('DELETE FROM chain_records')
+        conn.execute('DELETE FROM images')
+        conn.execute('DELETE FROM roles')
+        conn.execute('DELETE FROM bboxes')
+        conn.execute('DELETE FROM image_roles')
+        conn.execute('DELETE FROM image_chain_assignments')
+        conn.execute('DELETE FROM role_mappings')
         conn.commit() 

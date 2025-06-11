@@ -5,7 +5,7 @@ import logging
 from PyQt6.QtWidgets import QMenu, QApplication, QMessageBox, QDialog
 from PyQt6.QtCore import Qt, QTimer
 from .location_utils import LocationInputDialog, load_location_history, save_location_history
-from .image_cache_utils import get_image_cache_path
+from src.utils.image_cache_utils import get_image_cache_path
 
 
 def handle_image_list_context_menu(parent, image_list_panel, items, pos, folder_path_edit, set_status, on_image_json_saved, image_data_manager):

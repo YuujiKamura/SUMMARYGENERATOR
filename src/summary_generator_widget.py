@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 # 直接実行時にもsrc配下importが通るようにパスを調整
 current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.abspath(os.path.join(current_dir, '..'))
@@ -25,12 +26,13 @@ from src.utils.context_menu_utils import handle_image_list_context_menu
 from src.dictionary_manager import DictionaryManager
 from src.utils.chain_record_utils import find_chain_records_by_roles
 from src.utils.image_selection_debug import generate_image_selection_debug
-from src.summary_generator import load_role_mapping
-from src.record_matching_utils import match_roles_records_one_stop
+from src.utils.summary_generator import load_role_mapping
+from src.utils.record_matching_utils import match_roles_records_one_stop
 from dataclasses import dataclass, field
 from typing import List, Optional
-from src.image_entry import ImageEntry
-from src.image_data_manager import ImageDataManager
+from src.utils.image_entry import ImageEntry
+from src.utils.image_data_manager import ImageDataManager
+from src.db_manager import RoleMappingManager
 
 # --- path_managerの初期化 ---
 path_manager = PathManager()
@@ -91,10 +93,13 @@ class SummaryGeneratorWidget(QMainWindow):
     def __init__(self, parent=None, test_mode=False):
         super().__init__(parent)
         self.dictionary_manager = DictionaryManager(RECORDS_PATH)
-        # --- ロールマッピングを明示的にロードし保持 ---
-        self.role_mapping = load_role_mapping()
-        print(f"[DEBUG] role_mapping loaded at init: keys={list(self.role_mapping.keys()) if self.role_mapping else 'EMPTY'}")
+        # --- DBからロールマッピングをロードし保持 ---
+        db_role_mappings = RoleMappingManager.get_all_role_mappings()
+        self.role_mapping = {row['role_name']: json.loads(row['mapping_json']) for row in db_role_mappings}
+        print(f"[DEBUG] role_mapping loaded from DB at init: keys={list(self.role_mapping.keys()) if self.role_mapping else 'EMPTY'}")
         self.data_service = SummaryDataService(self.dictionary_manager, CACHE_DIR, RECORDS_PATH, role_mapping=self.role_mapping)
+        # 画像リストもDBから取得
+        self.image_data_manager = ImageDataManager.from_db()
         self.vm = SummaryGeneratorViewModel(self.data_service)
         self.test_mode = test_mode
         self.setup_ui()
@@ -479,4 +484,17 @@ class SummaryGeneratorWidget(QMainWindow):
             self.set_status_bar_message(error_msg)
             print(f"[ERROR] {error_msg}")
             import traceback
-            traceback.print_exc() 
+            traceback.print_exc()
+
+    def closeEvent(self, event):
+        """
+        アプリ終了時の処理: ログ出力のみ
+        """
+        import datetime
+        # ログ出力
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, 'summary_generator_app.log')
+        with open(log_path, 'w', encoding='utf-8') as f:
+            f.write(f"[{datetime.datetime.now()}] アプリ終了\n")
+        super().closeEvent(event) 

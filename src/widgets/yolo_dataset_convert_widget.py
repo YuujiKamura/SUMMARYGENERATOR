@@ -3,9 +3,9 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit, QMessageBox
 )
 from PyQt6.QtCore import Qt
-from ..yolo_dataset_exporter import YoloDatasetExporter
+from src.yolo_dataset_exporter import YoloDatasetExporter
 from widgets.components.yolo_dataset_convert_form import YoloDatasetConvertForm
-from ..utils.path_manager import PathManager
+from src.utils.path_manager import PathManager
 
 class YoloDatasetConvertWidget(QWidget):
     """画像リストJSONを選択してYOLOデータセットに変換するウィジェット"""

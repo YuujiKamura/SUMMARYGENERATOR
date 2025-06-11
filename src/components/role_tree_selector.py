@@ -1,7 +1,6 @@
-# --- Copied from src/components/role_tree_selector.py ---
 from PyQt6.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout
 from PyQt6.QtCore import pyqtSignal, Qt
-from utils.roles_utils import group_roles_by_category
+from src.utils.roles_utils import group_roles_by_category
 
 class RoleTreeSelector(QWidget):
     role_selected = pyqtSignal(str)  # 選択されたロールのlabelを返す
@@ -38,4 +37,4 @@ class RoleTreeSelector(QWidget):
             if item and not item.parent():
                 # カテゴリー（親）をクリックした場合、展開/フォールドをトグル
                 item.setExpanded(not item.isExpanded())
-        return super().eventFilter(obj, event)
+        return super().eventFilter(obj, event) 

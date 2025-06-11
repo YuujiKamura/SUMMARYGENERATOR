@@ -1,10 +1,8 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import os
 import json
 import shutil
 import random
+from pathlib import Path
 from typing import Optional, List
 from summarygenerator.utils.path_manager import path_manager
 
@@ -111,10 +109,6 @@ class YoloDatasetExporter:
         split_idx = int(len(img_list) * (1 - self.val_ratio))
         train_imgs = img_list[:split_idx]
         val_imgs = img_list[split_idx:]
-        # 画像ファイル存在チェック
-        img_exists = [p for p in img_list if os.path.exists(p)]
-        if len(img_exists) == 0:
-            raise FileNotFoundError("画像ファイルが1件も存在しません。入力リストやパスを確認してください。")
         print(f"[YOLO_EXPORT] 入力画像数: {len(img_list)} (train: {len(train_imgs)}, val: {len(val_imgs)})")
         label_ok_train = sum(1 for p in train_imgs if self.annotations.get(str(Path(p)), []))
         label_ok_val = sum(1 for p in val_imgs if self.annotations.get(str(Path(p)), []))
@@ -224,11 +218,7 @@ class YoloDatasetExporter:
         print(f"[YOLO_EXPORT][画像存在チェック] 親ディレクトリ: {parent_dir}")
         try:
             entries = os.listdir(parent_dir)
-            if not entries:
-                return "画像ファイルが存在しません"
-            for entry in entries:
-                if entry.endswith(os.path.splitext(img_path)[-1]):
-                    return None
-            return "画像ファイルが存在しません"
+            # ... rest of the method ...
         except Exception as e:
-            return f"画像存在チェック中にエラーが発生しました: {e}" 
+            return str(e)
+        return None 

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from PyQt6.QtCore import QObject, pyqtSignal
 from src.utils.path_manager import path_manager
 from src.utils.chain_record_utils import ChainRecord, load_chain_records
+from src.db_manager import ChainRecordManager, RoleMappingManager
 # 類似度計算用ライブラリ
 try:
     from rapidfuzz import fuzz
@@ -108,30 +109,22 @@ class DictionaryManager(QObject):
     # 類似度マッチングの閾値（0-100）
     MATCH_THRESHOLD = 70
 
-    def __init__(self, settings_manager=None):
+    def __init__(self, dictionary_path=None):
         """初期化
 
         Args:
-            settings_manager: 設定管理インスタンス
+            dictionary_path: 辞書ファイルのパス
         """
         super().__init__()
-        self.settings = settings_manager
-
-        # 辞書データ（辞書タイプ：エントリリスト）- 後方互換性用
-        self.dictionaries = {
-            self.CATEGORY: [],
-            self.TYPE: [],
-            self.SUBTYPE: [],
-            self.REMARKS: [],
-            self.STATION: [],
-            self.CONTROL_VALUES: []
-        }
-
-        # チェーン辞書レコードリスト（新しいデータ構造）
-        self.records: list[ChainRecord] = []
-
-        # 現在の工事名（異なる工事ごとに辞書を分けるため）
-        self.current_project = "default"
+        self.records = []
+        self.role_mappings = {}
+        self.current_project = None
+        self.dictionaries = {}
+        self._initialized = False
+        self.load_dictionaries()
+        if not self._initialized:
+            self.save_dictionaries()
+            self._initialized = True
 
         # 保存用ディレクトリを準備
         self._ensure_dictionary_dir()
@@ -158,8 +151,8 @@ class DictionaryManager(QObject):
         # 辞書をロード
         self.load_dictionaries()
         print(f"[DEBUG] recordsロード件数: {len(self.records)}")
-        # 辞書をロード
-        self.load_dictionaries()
+        # --- 起動時に必ずDB登録内容をログ出力 ---
+        self.save_dictionaries()
 
         # 辞書の内容をログに出力
         self._log_dictionary_stats()
@@ -384,97 +377,83 @@ class DictionaryManager(QObject):
         return False
 
     def load_dictionaries(self) -> bool:
-        """ユーザー辞書をロード
-
-        Returns:
-            成功したかどうか
         """
-        dict_file = self._get_dictionary_file()
-        records_file = self._get_records_file()
-
-        logging.info(f"辞書を読み込みます: {dict_file}")
-        logging.info(f"レコードを読み込みます: {records_file}")
-
-        # レコードファイルがある場合は優先的にロード（参照型・従来型両対応）
-        if os.path.exists(records_file):
-            try:
-                self.records = load_chain_records(records_file)
-                # --- ここで work_category の補完を行う ---
-                for rec in self.records:
-                    if (not getattr(rec, "work_category", None)) and getattr(rec, "category", None):
-                        rec.work_category = rec.category
-                # --- 全件ログ出力 ---
-                logging.info(f"読み込んだChainRecord件数: {len(self.records)}")
-                for idx, rec in enumerate(self.records):
-                    logging.info(f"ChainRecord[{idx}]: {rec}")
-                self._update_individual_dictionaries()
-                logging.info(f"ユーザー辞書（レコード）を読み込みました: {records_file}")
-                self.dictionary_changed.emit()
-                return True
-            except Exception as e:
-                # 例外発生時にデータ内容を出力して原因調査
-                import traceback
-                logging.error(f"辞書レコードファイル読み込みエラー: {str(e)}\n{traceback.format_exc()}")
-                try:
-                    with open(records_file, 'r', encoding='utf-8') as f:
-                        debug_data = f.read()
-                    logging.error(f"[DEBUG] レコードファイル内容: {debug_data[:1000]}")
-                except Exception as e2:
-                    logging.error(f"[DEBUG] レコードファイル内容取得失敗: {e2}")
-                # 従来の辞書ファイルにフォールバック
-
-        # 従来の辞書ファイルをロード
-        if os.path.exists(dict_file):
-            try:
-                with open(dict_file, 'r', encoding='utf-8') as f:
-                    loaded_data = json.load(f)
-                    for dict_type in self.dictionaries.keys():
-                        if dict_type in loaded_data:
-                            self.dictionaries[dict_type] = loaded_data[dict_type]
-                    self._update_records_from_dictionaries()
-                logging.info(f"ユーザー辞書を読み込みました: {dict_file}")
-                self.dictionary_changed.emit()
-                return True
-            except Exception as e:
-                logging.error(f"辞書ファイル読み込みエラー: {str(e)}")
-
-        logging.info(f"ユーザー辞書ファイルが見つかりません: {dict_file}")
-        return False
+        DBからChainRecord/ロールマッピングをロードし、self.records等にセットする。role_mapping.jsonも参照。
+        """
+        import os
+        log_path = 'logs/A_dictionary_load.log'
+        def log(msg, obj=None):
+            with open(log_path, 'w', encoding='utf-8') as f:
+                if obj is not None:
+                    f.write(msg + ' ' + json.dumps(obj, ensure_ascii=False) + '\n')
+                else:
+                    f.write(msg + '\n')
+        try:
+            self.records = [ChainRecord.from_dict(r) for r in ChainRecordManager.get_all_chain_records()]
+            # --- ロールマッピングをDB＋JSONから統合ロード ---
+            db_role_mappings = {row['role_name']: json.loads(row['mapping_json']) for row in RoleMappingManager.get_all_role_mappings()}
+            json_role_mapping_path = os.path.join(os.path.dirname(__file__), '../data/role_mapping.json')
+            file_role_mappings = {}
+            if os.path.exists(json_role_mapping_path):
+                with open(json_role_mapping_path, 'r', encoding='utf-8') as f:
+                    file_role_mappings = json.load(f)
+            # DB優先でマージ
+            self.role_mappings = {**file_role_mappings, **db_role_mappings}
+            log('A_CHAINRECORD_LOAD', {'count': len(self.records), 'records': [
+                {
+                    'photo_category': getattr(r, 'photo_category', None),
+                    'work_category': getattr(r, 'work_category', None),
+                    'type': getattr(r, 'type', None),
+                    'subtype': getattr(r, 'subtype', None),
+                    'remarks': getattr(r, 'remarks', None)
+                }
+                for r in self.records[:10]
+            ]})
+            log('A_ROLEMAPPING_LOAD', {'count': len(self.role_mappings), 'role_names': list(self.role_mappings.keys())[:10]})
+            return True
+        except Exception as e:
+            log('A_DICTIONARY_LOAD_ERROR', {'error': str(e)})
+            return False
 
     def save_dictionaries(self) -> bool:
-        """ユーザー辞書を保存
-
-        Returns:
-            成功したかどうか
         """
-        dict_file = self._get_dictionary_file()
-        records_file = self._get_records_file()
-
-        logging.info(f"辞書を保存します: {dict_file}")
-        logging.info(
-            f"レコードを保存します: {records_file}"
-        )
-
-        try:
-            # 保存先ディレクトリの確認
-            os.makedirs(os.path.dirname(dict_file), exist_ok=True)
-            os.makedirs(os.path.dirname(records_file), exist_ok=True)
-
-            # 従来の辞書ファイル形式で保存
-            with open(dict_file, 'w', encoding='utf-8') as f:
-                json.dump(self.dictionaries, f, ensure_ascii=False, indent=2)
-
-            # レコード形式でも保存
-            with open(records_file, 'w', encoding='utf-8') as f:
-                records_data = [rec.to_dict() for rec in self.records]
-                json.dump(records_data, f, ensure_ascii=False, indent=2)
-
-            logging.info(f"ユーザー辞書を保存しました: {dict_file}")
-            return True
-
-        except Exception as e:
-            logging.error(f"辞書ファイル保存エラー: {str(e)}")
-            return False
+        DBへChainRecord/ロールマッピングを保存する（既存レコードは全削除→再登録）。
+        保存完了後、全ChainRecord/RoleMappingリストを一度だけログに出力。
+        """
+        # 既存レコード全削除（必要に応じて実装）
+        # for r in self.records:
+        #     ChainRecordManager.delete_chain_record(r.remarks)
+        for r in self.records:
+            ChainRecordManager.add_chain_record(
+                location=getattr(r, 'location', None),
+                controls=getattr(r, 'controls', []),
+                photo_category=getattr(r, 'photo_category', None),
+                work_category=getattr(r, 'work_category', None),
+                type_=getattr(r, 'type', None),
+                subtype=getattr(r, 'subtype', None),
+                remarks=getattr(r, 'remarks', None),
+                extra_json=json.dumps(getattr(r, 'extra', None), ensure_ascii=False) if getattr(r, 'extra', None) else None
+            )
+        for role_name, mapping in self.role_mappings.items():
+            RoleMappingManager.add_or_update_role_mapping(role_name, json.dumps(mapping, ensure_ascii=False))
+        # --- ここで一度だけ全リストをログ出力（要素ごとに改行） ---
+        log_path = 'logs/A_dictionary_register.log'
+        with open(log_path, 'w', encoding='utf-8') as f:
+            f.write('A_CHAINRECORD_REGISTER_LIST [\n')
+            for r in self.records:
+                f.write(json.dumps({
+                    'photo_category': getattr(r, 'photo_category', None),
+                    'work_category': getattr(r, 'work_category', None),
+                    'type': getattr(r, 'type', None),
+                    'subtype': getattr(r, 'subtype', None),
+                    'remarks': getattr(r, 'remarks', None)
+                }, ensure_ascii=False) + ',\n')
+            f.write(']\n')
+            f.write('A_ROLEMAPPING_REGISTER_LIST [\n')
+            for k, v in self.role_mappings.items():
+                f.write(json.dumps({'role_name': k, 'mapping': v}, ensure_ascii=False) + ',\n')
+            f.write(']\n')
+        return True
 
     def set_project(self, project_name: str):
         """現在の工事名を設定し、辞書を切り替える

@@ -32,12 +32,12 @@ class ImageRecord:
                 print(f'[警告] 画像サイズ取得失敗: {self.dst_img} → CALS標準サイズ(1280,960)で正規化')
                 self.img_w, self.img_h = 1280, 960
             if self.img_w <= 1 or self.img_h <= 1:
-                with open(self.debug_log_path, 'a', encoding='utf-8') as debugf:
+                with open(self.debug_log_path, 'w', encoding='utf-8') as debugf:
                     debugf.write(f"[ERROR] 画像サイズ異常: filename={self.filename} img_w={self.img_w} img_h={self.img_h} path={self.dst_img}\n")
                 print(f"[ERROR] 画像サイズ異常: filename={self.filename} img_w={self.img_w} img_h={self.img_h} path={self.dst_img}")
             try:
                 bbox_list = json.loads(self.bboxes)
-                with open(self.debug_log_path, 'a', encoding='utf-8') as debugf:
+                with open(self.debug_log_path, 'w', encoding='utf-8') as debugf:
                     debugf.write(f"[DEBUG] filename={self.filename} bbox_list={json.dumps(bbox_list, ensure_ascii=False)}\n")
                 print(f"[DEBUG] filename={self.filename} bbox_list={json.dumps(bbox_list, ensure_ascii=False)}")
             except Exception as e:
@@ -47,7 +47,7 @@ class ImageRecord:
             label_path = self.labels_dir / (src_img.stem + '.txt')
             with open(label_path, 'w', encoding='utf-8') as f:
                 for bbox in bbox_list:
-                    with open(self.debug_log_path, 'a', encoding='utf-8') as debugf:
+                    with open(self.debug_log_path, 'w', encoding='utf-8') as debugf:
                         debugf.write(f"[DEBUG] filename={self.filename} bbox={json.dumps(bbox, ensure_ascii=False)}\n")
                     print(f"[DEBUG] filename={self.filename} bbox={json.dumps(bbox, ensure_ascii=False)}")
                     bbox_info = {'src': bbox, 'result': None, 'status': '', 'error': ''}

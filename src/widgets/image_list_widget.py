@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QListView, QAbstractIt
 from PyQt6.QtCore import QSize, pyqtSignal, Qt
 from PyQt6.QtGui import QPixmap, QIcon
 import os
-from src.image_cache_utils import get_image_cache_path
+from src.utils.image_cache_utils import get_image_cache_path
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "../image_preview_cache")
 

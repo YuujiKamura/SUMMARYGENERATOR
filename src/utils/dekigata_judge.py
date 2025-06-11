@@ -2,7 +2,7 @@
 出来形（caption_board_dekigata）判定ロジック専用モジュール
 """
 import logging
-from .caption_board_utils import judge_caption_board_closeup
+from src.utils.caption_board_utils import judge_caption_board_closeup
 
 def _is_true(val):
     return val is True or val == "True" or val == 1

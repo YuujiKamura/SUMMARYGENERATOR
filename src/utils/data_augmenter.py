@@ -1,70 +1,38 @@
-# --- データ拡張メイン関数 ---
-import os
+#!/usr/bin/env python3
+"""
+データ拡張（データオーグメンテーション）モジュール
+トレーニングデータセットのサイズを仮想的に増やし、モデルの汎化性能を向上させるために使用します
+"""
 import shutil
-import random
-from typing import Optional, Callable, Dict, Any
+# import glob  # 未使用
+# import random  # 未使用
 from pathlib import Path
-from PIL import Image, ImageEnhance, ImageOps
-import numpy as np
+
 import cv2
+# import numpy as np  # 未使用
 import albumentations as A
+# from tqdm import tqdm  # 未使用
+from PyQt6.QtCore import QThread, pyqtSignal
 import yaml
-import datetime
-
-def augment_image(image_path: str, out_dir: str, idx: int = 0) -> str:
-    """
-    画像をランダムに拡張して保存する（回転・明度・反転など）
-    """
-    img = Image.open(image_path)
-    # ランダム回転
-    angle = random.choice([0, 90, 180, 270])
-    img = img.rotate(angle)
-    # 明度調整
-    enhancer = ImageEnhance.Brightness(img)
-    img = enhancer.enhance(random.uniform(0.7, 1.3))
-    # ランダム左右反転
-    if random.random() > 0.5:
-        img = ImageOps.mirror(img)
-    # 保存
-    out_name = f"{Path(image_path).stem}_aug{idx}{Path(image_path).suffix}"
-    out_path = os.path.join(out_dir, out_name)
-    img.save(out_path)
-    return out_path
-
-def augment_label(label_path: str, out_path: str, angle: int, img_w: int, img_h: int, flip: bool = False):
-    """
-    YOLOラベルを回転・反転に合わせて変換して保存
-    """
-    # ... existing code ...
 
 def make_augmenter():
+    """Albumentationsを使った拡張パイプライン定義"""
     return A.Compose([
         A.HorizontalFlip(p=0.5),
         A.Rotate(limit=15, p=0.5),
         A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
         A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
         A.Blur(blur_limit=3, p=0.2),
-    ], bbox_params=A.BboxParams(format='yolo', label_fields=['category_ids'], check_each_transform=True, min_visibility=0.0))
+    ], bbox_params=A.BboxParams(format='yolo', label_fields=['category_ids'], check_each_transform=True))
 
 def is_valid_yolo_bbox(x, y, w, h):
+    # すべて0.0～1.0の範囲
     if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0 and 0.0 < w <= 1.0 and 0.0 < h <= 1.0):
         return False
+    # bbox全体が画像内に収まる
     if x - w/2 < 0.0 or x + w/2 > 1.0 or y - h/2 < 0.0 or y + h/2 > 1.0:
         return False
     return True
-
-def get_default_aug_output_dir():
-    now_str = datetime.datetime.now().strftime("%Y%m%d")
-    return Path("datasets") / f"yolo_dataset_aug_{now_str}"
-
-def split_train_val(files, val_ratio=0.2, seed=42):
-    random.seed(seed)
-    files = list(files)
-    random.shuffle(files)
-    n_val = int(len(files) * val_ratio)
-    val_files = set(files[:n_val])
-    train_files = set(files[n_val:])
-    return train_files, val_files
 
 def augment_dataset(
     src_img_dir: str,
@@ -73,7 +41,20 @@ def augment_dataset(
     n_augment: int = 3,
     progress_callback=None
 ):
-    log_file = open('augment_warnings.log', 'a', encoding='utf-8')
+    """
+    データセットに対して拡張処理を適用し、新しいデータセットを生成します
+    
+    Args:
+        src_img_dir: 元画像フォルダ
+        src_label_dir: YOLOラベル (.txt) フォルダ
+        dst_dir: 増幅後の出力フォルダ（images と labels サブフォルダが作られます）
+        n_augment: 画像あたり何バリエーション作るか
+        progress_callback: 進捗状況を受け取るコールバック関数（オプション）
+    
+    Returns:
+        dict: 処理結果の情報（元画像数、生成画像数など）
+    """
+    log_file = open('augment_warnings.log', 'w', encoding='utf-8')
     def log(msg):
         print(f"[AUGMENT] {msg}")
         if progress_callback:
@@ -84,6 +65,8 @@ def augment_dataset(
     dst_dir = Path(dst_dir)
     dst_images = dst_dir / "images"
     dst_labels = dst_dir / "labels"
+
+    # 出力ディレクトリをクリーン or 作成
     if dst_images.exists():
         log(f"出力画像ディレクトリを削除: {dst_images}")
         shutil.rmtree(dst_images)
@@ -92,7 +75,10 @@ def augment_dataset(
         shutil.rmtree(dst_labels)
     dst_images.mkdir(parents=True, exist_ok=True)
     dst_labels.mkdir(parents=True, exist_ok=True)
+
     augmenter = make_augmenter()
+
+    # 入力画像の列挙
     img_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
     img_files = []
     for ext in img_extensions:
@@ -102,6 +88,8 @@ def augment_dataset(
     log(f"各画像に対して{n_augment}種類の拡張処理を適用します")
     log(f"出力先: {dst_dir}")
     log("-" * 40)
+
+    # 元ファイルをまずコピー
     log("元画像をコピー中...")
     for i, img_path in enumerate(img_files):
         label_path = src_label_dir / (img_path.stem + ".txt")
@@ -110,6 +98,8 @@ def augment_dataset(
             shutil.copy(label_path, dst_labels / label_path.name)
         if i % 10 == 0:
             log(f"コピー進捗: {i+1}/{total_files}")
+
+    # 拡張処理
     aug_count = 0
     log("画像拡張処理中...")
     for i, img_path in enumerate(img_files):
@@ -122,27 +112,14 @@ def augment_dataset(
             continue
         bboxes = []
         class_ids = []
-        label_lines_raw = []
         try:
             with open(label_path, "r", encoding="utf-8") as f:
                 for line in f:
-                    label_lines_raw.append(line.rstrip())
                     parts = line.strip().split()
                     if len(parts) >= 5:
                         cls_id = int(parts[0])
                         x_center, y_center, w, h = map(float, parts[1:5])
-                        # --- クリップ前処理 ---
-                        x1 = max(0.0, x_center - w/2)
-                        y1 = max(0.0, y_center - h/2)
-                        x2 = min(1.0, x_center + w/2)
-                        y2 = min(1.0, y_center + h/2)
-                        new_w = x2 - x1
-                        new_h = y2 - y1
-                        if new_w <= 0 or new_h <= 0:
-                            continue  # 完全に画像外
-                        new_x = (x1 + x2) / 2
-                        new_y = (y1 + y2) / 2
-                        bboxes.append([new_x, new_y, new_w, new_h])
+                        bboxes.append([x_center, y_center, w, h])
                         class_ids.append(cls_id)
         except Exception as e:
             log(f"警告: ラベルファイル読み込みエラー: {label_path} - {str(e)}")
@@ -162,13 +139,8 @@ def augment_dataset(
                     # 0.0～1.0にクリップ
                     box = [max(0.0, min(1.0, v)) for v in box]
                     x, y, w, h = box
-                    # bboxの端が完全に画像外なら除外
-                    if x + w/2 <= 0.0 or x - w/2 >= 1.0 or y + h/2 <= 0.0 or y - h/2 >= 1.0:
-                        log(f"警告: bbox完全に画像外: {out_name} class_id={cid} box={box}")
-                        continue
-                    # クリップ後のbboxが有効範囲か再チェック
                     if not is_valid_yolo_bbox(x, y, w, h):
-                        log(f"警告: bboxクリップ後も無効: {out_name} class_id={cid} box={box}")
+                        log(f"警告: bbox無効: {out_name} class_id={cid} box={box}")
                         continue
                     label_lines.append(f"{cid} {x:.6f} {y:.6f} {w:.6f} {h:.6f}")
                 if label_lines:
@@ -176,13 +148,14 @@ def augment_dataset(
                         f.write("\n".join(label_lines))
                     aug_count += 1
             except Exception as e:
-                log(f"警告: 拡張処理エラー: {img_path.name} - {str(e)}\n  元ラベル: {label_path}")
+                log(f"警告: 拡張処理エラー: {img_path.name} - {str(e)}")
         if i % 5 == 0:
             log(f"拡張進捗: {i+1}/{total_files}")
-    # train/val分割
-    val_ratio = 0.2  # デフォルト値。元データセットのval比率を取得する場合はyamlから取得可
+
+    # 元のdataset.yamlからクラス名を取得
     orig_yaml = None
     orig_names = None
+    # src_label_dirの親ディレクトリを基準にdataset.yamlを探す
     src_base = Path(src_label_dir).parent.parent if (Path(src_label_dir).name == 'train') else Path(src_label_dir).parent
     for candidate in [src_base / 'dataset.yaml', src_base.parent / 'dataset.yaml']:
         if candidate.exists():
@@ -192,36 +165,13 @@ def augment_dataset(
         with open(orig_yaml, 'r', encoding='utf-8') as f:
             ydata = yaml.safe_load(f)
         orig_names = ydata.get('names')
-        if 'val' in ydata and 'train' in ydata:
-            # val/train比率を推定
-            train_count = len(list((src_base / ydata['train']).glob('*.jpg')))
-            val_count = len(list((src_base / ydata['val']).glob('*.jpg')))
-            if train_count + val_count > 0:
-                val_ratio = val_count / (train_count + val_count)
-    # 画像ファイルをtrain/valに分割
-    train_imgs, val_imgs = split_train_val([f for f in dst_images.glob('*.jpg')], val_ratio=val_ratio)
-    # train/valサブディレクトリ作成
-    for sub in ['train', 'val']:
-        (dst_images / sub).mkdir(exist_ok=True)
-        (dst_labels / sub).mkdir(exist_ok=True)
-    # 画像・ラベルを移動
-    for img_path in dst_images.glob('*.jpg'):
-        stem = img_path.stem
-        label_path = dst_labels / f"{stem}.txt"
-        if img_path in train_imgs:
-            shutil.move(str(img_path), str(dst_images / 'train' / img_path.name))
-            if label_path.exists():
-                shutil.move(str(label_path), str(dst_labels / 'train' / label_path.name))
-        else:
-            shutil.move(str(img_path), str(dst_images / 'val' / img_path.name))
-            if label_path.exists():
-                shutil.move(str(label_path), str(dst_labels / 'val' / label_path.name))
+
     # dataset.yaml ファイルの作成
     yaml_content = f"""
 # YOLOv8データセット設定
-path: .
-train: images/train
-val: images/val
+path: {dst_dir.absolute()}
+train: images
+val: images
 
 # クラス情報
 names:
@@ -235,7 +185,7 @@ names:
                 yaml_content += f"  {i}: {v}\n"
     else:
         class_ids = set()
-        for label_file in (dst_labels / 'train').glob("*.txt"):
+        for label_file in dst_labels.glob("*.txt"):
             try:
                 with open(label_file, "r", encoding="utf-8") as f:
                     for line in f:
@@ -248,27 +198,59 @@ names:
             yaml_content += f"  {class_id}: class_{class_id}\n"
     with open(dst_dir / "dataset.yaml", "w", encoding="utf-8") as f:
         f.write(yaml_content)
-    log_file.close()
-    return {
+    log("-" * 40)
+    log("処理完了:")
+    log(f"- 元画像数: {total_files}")
+    log(f"- 拡張画像数: {aug_count}")
+    log(f"- 合計画像数: {total_files + aug_count}")
+    log(f"- 出力ディレクトリ: {dst_dir}")
+    log(f"- データセット設定: {dst_dir / 'dataset.yaml'}")
+    result = {
         "original_images": total_files,
         "augmented_images": aug_count,
         "total_images": total_files + aug_count,
+        "output_dir": str(dst_dir),
         "yaml_file": str(dst_dir / "dataset.yaml")
     }
+    log_file.close()
+    return result
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="YOLOデータセット用データ拡張ツール")
-    parser.add_argument("--src_img_dir", required=True, help="元画像ディレクトリ")
-    parser.add_argument("--src_label_dir", required=True, help="元ラベルディレクトリ")
-    parser.add_argument("--dst_dir", default=None, help="出力先ディレクトリ（省略時はdatasets/日付/）")
-    parser.add_argument("--n_augment", type=int, default=3, help="画像ごとの拡張バリエーション数")
-    args = parser.parse_args()
-    dst_dir = Path(args.dst_dir) if args.dst_dir else get_default_aug_output_dir()
-    result = augment_dataset(
-        src_img_dir=args.src_img_dir,
-        src_label_dir=args.src_label_dir,
-        dst_dir=dst_dir,
-        n_augment=args.n_augment
-    )
-    print("拡張完了:", result) 
+
+class DataAugmentThread(QThread):
+    """バックグラウンドでデータ拡張を実行するためのスレッド"""
+    output_received = pyqtSignal(str)
+    process_finished = pyqtSignal(int, dict)  # 終了コード, 処理結果情報
+    
+    def __init__(self, src_img_dir, src_label_dir, dst_dir, n_augment=3):
+        super().__init__()
+        self.src_img_dir = src_img_dir
+        self.src_label_dir = src_label_dir
+        self.dst_dir = dst_dir
+        self.n_augment = n_augment
+    
+    def progress_callback(self, message):
+        """進捗メッセージをGUIに送信"""
+        self.output_received.emit(message)
+    
+    def run(self):
+        try:
+            self.output_received.emit("データ拡張処理を開始します:")
+            self.output_received.emit(f"- 元画像ディレクトリ: {self.src_img_dir}")
+            self.output_received.emit(f"- 元ラベルディレクトリ: {self.src_label_dir}")
+            self.output_received.emit(f"- 出力ディレクトリ: {self.dst_dir}")
+            self.output_received.emit(f"- 拡張バリエーション数: {self.n_augment}")
+            self.output_received.emit("")
+            
+            result = augment_dataset(
+                src_img_dir=self.src_img_dir,
+                src_label_dir=self.src_label_dir,
+                dst_dir=self.dst_dir,
+                n_augment=self.n_augment,
+                progress_callback=self.progress_callback
+            )
+            
+            self.output_received.emit("データ拡張処理が完了しました")
+            self.process_finished.emit(0, result)
+        except Exception as e:
+            self.output_received.emit(f"[エラー] データ拡張中に例外が発生しました: {e}")
+            self.process_finished.emit(1, {}) 

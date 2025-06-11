@@ -5,11 +5,38 @@ from src.utils.image_list_utils import filter_and_sort_entries
 from src.utils.summary_generator import match_image_to_records
 from src.utils.records_loader import load_records_from_json
 from pathlib import Path
-from src.utils.chain_record_utils import ChainRecord
+from src.utils.chain_record_utils import ChainRecord, find_chain_records_by_roles
 from src.utils.image_entry import ImageEntry, ImageEntryList
 from typing import Optional, Callable, List, Dict, Any
 import logging
 from collections import defaultdict
+from src.db_manager import (
+    ChainRecordManager, RoleMappingManager, ImageManager, BBoxManager,
+    import_image_preview_cache_json, reset_all_tables
+)
+from src.utils.path_manager import PathManager
+import json
+from src.utils.thermometer_utils import process_thermometer_records
+import os
+import datetime
+import hashlib
+
+LOG_PATHS = {
+    'S1_chain_records_and_role_mappings': os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs', 'S1_chain_records_and_role_mappings.log'),
+    'S2_image_entries': os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs', 'S2_image_entries.log'),
+    'S3_match_results': os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs', 'S3_match_results.log'),
+}
+_last_log_hash = {}
+def step_log(label, data):
+    path = LOG_PATHS[label]
+    h = hashlib.md5(json.dumps(data, ensure_ascii=False, sort_keys=True).encode('utf-8')).hexdigest()
+    if _last_log_hash.get(label) == h:
+        return
+    _last_log_hash[label] = h
+    with open(path, 'a', encoding='utf-8') as f:
+        f.write(f"[{datetime.datetime.now().isoformat()}] {label}\n")
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write('\n')
 
 def is_thermometer_entry(entry):
     # rolesまたはbboxesに温度計ロールが含まれているか判定
@@ -37,17 +64,26 @@ class SummaryDataService:
         self.load_initial_data()
 
     def load_initial_data(self):
-        if self.dictionary_manager:
-            all_records = self.dictionary_manager.records
-            if all_records:
-                self.remarks_to_chain_record = {
-                    record.remarks: record
-                    for record in all_records if hasattr(record, 'remarks') and record.remarks
-                }
+        # DBからChainRecord/ロールマッピングをロード
+        all_records = [ChainRecord.from_dict(r) for r in ChainRecordManager.get_all_chain_records()]
+        self.all_records = all_records
+        self.role_mappings = {row['role_name']: json.loads(row['mapping_json']) for row in RoleMappingManager.get_all_role_mappings()}
+        # S1: チェーンレコードとロールマッピングまとめてダンプ
+        step_log('S1_chain_records_and_role_mappings', {
+            'chain_records': [r.__dict__ for r in all_records],
+            'role_mappings': self.role_mappings
+        })
+        if all_records:
+            self.remarks_to_chain_record = {
+                record.remarks: record
+                for record in all_records if hasattr(record, 'remarks') and record.remarks
+            }
 
     def set_all_entries(self, entries: List[ImageEntry]):
         print(f"[DEBUG][set_all_entries] 呼び出し: entriesの長さ={len(entries)} id_list={[id(e) for e in entries]}")
         self.all_entries = entries
+        # S2: 画像リストDB登録結果
+        step_log('S2_image_entries', [e.__dict__ for e in entries])
         for entry in entries:
             # テスト用debug_log書き込みを削除
             print(f"[DEBUG][set_all_entries] entry: image_path={getattr(entry, 'image_path', None)}, id={id(entry)}, debug_log={entry.debug_log}")
@@ -59,7 +95,6 @@ class SummaryDataService:
         print(f"[DEBUG][set_all_entries] thermometer_entries(sorted): {[getattr(e, 'image_path', None) for e in thermometer_entries]}")
         if thermometer_entries:
             print(f"[DEBUG][SummaryDataService] 温度計ロール画像群: {len(thermometer_entries)}件 サイクルマッチング開始")
-            from src.utils.thermometer_utils import process_thermometer_records
             # 各ImageEntryの通常候補を再取得
             candidates_list = [self.get_remarks_for_entry(e) for e in thermometer_entries]
             print(f"[DEBUG][set_all_entries] candidates_list lens: {[len(c) for c in candidates_list]}")
@@ -84,8 +119,8 @@ class SummaryDataService:
             print("[DEBUG][SummaryDataService] 温度計サイクルマッチング詳細:")
             for line in group_debug_log:
                 print("  ", line)
-            # if hasattr(self, 'thermometer_group') and self.thermometer_group:
-            #     self.thermometer_group.debug_log.extend(group_debug_log)
+            if hasattr(self, 'thermometer_group') and self.thermometer_group:
+                self.thermometer_group.debug_log.extend(group_debug_log)
             print(f"[DEBUG][SummaryDataService] サイクルマッチング結果反映完了")
         # --- ここで全ImageEntryのdebug_logをprint ---
         print("[DEBUG][set_all_entries] return直前: entriesのdebug_log一覧")
@@ -103,10 +138,9 @@ class SummaryDataService:
         """
         画像リスト・マッチ結果からカテゴリ一覧を返す
         """
-        records = getattr(self.dictionary_manager, 'records', []) if self.dictionary_manager and hasattr(self.dictionary_manager, 'records') else []
         remarks_to_category = {
             getattr(r, 'remarks', None): getattr(r, 'photo_category', '')
-            for r in records if getattr(r, 'remarks', None)
+            for r in self.dictionary_manager.records if getattr(r, 'remarks', None)
         }
         sorted_entries, debug_lines = filter_and_sort_entries(
             entries, match_results, remarks_to_category, None, True
@@ -124,10 +158,9 @@ class SummaryDataService:
         """
         カテゴリ・ソート順で画像リストを並べ替え
         """
-        records = getattr(self.dictionary_manager, 'records', []) if self.dictionary_manager and hasattr(self.dictionary_manager, 'records') else []
         remarks_to_category = {
             getattr(r, 'remarks', None): getattr(r, 'photo_category', '')
-            for r in records if getattr(r, 'remarks', None)
+            for r in self.dictionary_manager.records if getattr(r, 'remarks', None)
         }
         sorted_entries, debug_lines = filter_and_sort_entries(
             entries, match_results, remarks_to_category, selected_cat, ascending
@@ -135,9 +168,6 @@ class SummaryDataService:
         return sorted_entries, debug_lines
 
     def get_match_results(self, entries, role_mapping, remarks_to_chain_record, debug_callback=None):
-        """
-        画像リストからマッチング結果を取得（role_mapping, remarks_to_chain_recordはDIで明示的に渡す）
-        """
         image_json_dict = {}
         for e in entries:
             roles = getattr(e, 'roles', None)
@@ -148,47 +178,36 @@ class SummaryDataService:
                         if 'role' in b and b['role']:
                             roles.append(b['role'])
             if debug_callback:
-                debug_callback(getattr(e, 'image_path', None), f"[get_match_results] roles: {roles}")
-            
-            # match_image_to_recordsが期待する形式でimg_jsonを構築
+                debug_callback(getattr(e, 'path', None), f"[get_match_results] roles: {roles}")
             img_json = {
                 'image_path': e.path,
                 'roles': roles
             }
-            # cache_jsonから追加情報を取得（あれば）
             if hasattr(e, 'cache_json') and e.cache_json:
                 img_json.update({
                     'img_w': e.cache_json.get('img_w'),
                     'img_h': e.cache_json.get('img_h'),
                     'bboxes': e.cache_json.get('bboxes', [])
                 })
-            
             image_json_dict[e.path] = img_json
-        # --- ロールマッピングのロード詳細をデバッグコールバックに流す ---
-        mapping_debug_lines = []
-        if role_mapping:
-            mapping_debug_lines.append(f"[ロールマッピング] 正常ロード: 件数={len(role_mapping)} keys={list(role_mapping.keys())[:5]}{' ...' if len(role_mapping)>5 else ''}")
-        else:
-            mapping_debug_lines.append(f"[ロールマッピング] ロード失敗 or 空")
-        if debug_callback:
-            for line in mapping_debug_lines:
-                debug_callback('role_mapping', line)
-        # match_results = match_image_to_remarks(
-        #     image_roles, role_mapping, self.cache_dir, records_path=self.records_path, debug_callback=debug_callback
-        # )        from summarygenerator.utils.summary_generator import match_image_to_records
-        from src.utils.chain_record_utils import find_chain_records_by_roles
-        records = getattr(self.dictionary_manager, 'records', [])
+        step_log('image_json_dict', image_json_dict)
+        # DBからChainRecordを取得
+        records = [ChainRecord.from_dict(r) for r in ChainRecordManager.get_all_chain_records()]
+        step_log('chain_records_match', [r.__dict__ for r in records])
         match_results = match_image_to_records(image_json_dict, records)
+        # S4: マッチング結果
+        step_log('S4_match_results', match_results)
         return match_results
 
     def get_remarks_for_entry(self, entry: 'ImageEntry', debug_callback: Optional[Callable[[str, str], None]] = None) -> List[ChainRecord]:
         def _debug(msg):
-            if debug_callback and entry and hasattr(entry, 'image_path') and entry.image_path:
-                debug_callback(entry.image_path, msg)
-        if not entry or not hasattr(entry, 'image_path') or not entry.image_path:
+            if debug_callback and entry and hasattr(entry, 'path') and entry.path:
+                debug_callback(entry.path, msg)
+        if not entry or not hasattr(entry, 'path') or not entry.path:
             if debug_callback:
                 debug_callback("unknown_entry", "[get_remarks_for_entry] Invalid entry provided.")
             return []
+        # rolesが空ならbboxesから抽出
         current_image_roles = entry.roles if hasattr(entry, 'roles') and entry.roles else []
         if (not current_image_roles or current_image_roles == {}) and hasattr(entry, 'cache_json') and entry.cache_json and 'bboxes' in entry.cache_json:
             current_image_roles = [b.get('role') for b in entry.cache_json['bboxes'] if b.get('role')]
@@ -196,28 +215,27 @@ class SummaryDataService:
         if not isinstance(current_image_roles, list):
             current_image_roles = []
         if not current_image_roles:
-            _debug(f"[get_remarks_for_entry] No roles determined for {entry.image_path}. Cannot match ChainRecords.")
+            _debug(f"[get_remarks_for_entry] No roles determined for {entry.path}. Cannot match ChainRecords.")
             return []
-        records = getattr(self.dictionary_manager, 'records', []) if self.dictionary_manager else []
-        from src.utils.chain_record_utils import find_chain_records_by_roles
+        # ChainRecordリストをrolesで直接フィルタ
+        records = getattr(self.dictionary_manager, 'records', [])
         matched_records = find_chain_records_by_roles(current_image_roles, records)
         _debug(f"[get_remarks_for_entry] Matched ChainRecords: {[r.remarks for r in matched_records]}")
         return matched_records
 
     def get_photo_category_from_remarks(self, remarks: str) -> str:
         rec = self.remarks_to_chain_record.get(remarks)
-        return rec.photo_category if rec and hasattr(rec, 'photo_category') and rec.photo_category is not None else ''
+        return rec.photo_category if rec else ''
 
     def get_chain_records_for_image(self, img_path: str) -> list:
+        # 画像パスからrolesを取得し、ChainRecordリストを返す
+        # 画像パス→rolesリストの取得方法はimage_rolesまたはcache_json等に応じて調整
         roles = []
+        # image_rolesがdict[str, list[str]]形式で保持されている前提
         if hasattr(self, 'image_roles') and img_path in self.image_roles:
-            val = self.image_roles[img_path]
-            if isinstance(val, dict):
-                roles = list(val.values())
-            elif isinstance(val, list):
-                roles = val
-        records = getattr(self.dictionary_manager, 'records', []) if self.dictionary_manager else []
-        from src.utils.chain_record_utils import find_chain_records_by_roles
+            roles = self.image_roles[img_path]
+        # records取得
+        records = getattr(self.dictionary_manager, 'records', [])
         return find_chain_records_by_roles(roles, records)
 
     def get_image_entry_for_image(self, img_path: str) -> Optional[ImageEntry]:
@@ -228,3 +246,43 @@ class SummaryDataService:
             if hasattr(entry, 'image_path') and entry.image_path == img_path:
                 return entry
         return None
+
+    def import_chain_records_from_json(self, json_path=None):
+        if json_path is None:
+            pm = PathManager()
+            json_path = pm.default_records
+        records = load_records_from_json(json_path)
+        for rec in records:
+            ChainRecordManager.add_chain_record(
+                location=rec.get('location'),
+                controls=rec.get('controls'),
+                photo_category=rec.get('photo_category'),
+                work_category=rec.get('work_category'),
+                type_=rec.get('type'),
+                subtype=rec.get('subtype'),
+                remarks=rec.get('remarks'),
+                extra_json=json.dumps(rec, ensure_ascii=False)
+            )
+
+    def import_role_mappings_from_json(self, json_path=None):
+        if json_path is None:
+            pm = PathManager()
+            json_path = pm.role_mapping
+        with open(json_path, encoding='utf-8') as f:
+            mappings = json.load(f)
+        for role_name, mapping in mappings.items():
+            if role_name.startswith('_'):  # コメント等はスキップ
+                continue
+            RoleMappingManager.add_or_update_role_mapping(role_name, json.dumps(mapping, ensure_ascii=False))
+
+    def import_image_entries_from_json(self, json_path=None):
+        if json_path is None:
+            pm = PathManager()
+            json_path = pm.image_preview_cache_master
+        import_image_preview_cache_json(json_path=json_path)
+
+    def reset_all_resources(self):
+        reset_all_tables()
+        self.import_chain_records_from_json()
+        self.import_role_mappings_from_json()
+        self.import_image_entries_from_json()

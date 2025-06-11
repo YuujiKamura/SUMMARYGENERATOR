@@ -60,67 +60,61 @@ class RoleEditorDialog(QDialog):
         self.move_role_btn.clicked.connect(self.move_roles_to_category)
         self.ok_btn.clicked.connect(self.accept)
         self.cancel_btn.clicked.connect(self.reject)
+
     def load_roles(self):
-        if not os.path.exists(PRESET_ROLES_PATH):
+        try:
+            with open(PRESET_ROLES_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"ロール読込失敗: {e}")
             return []
-        with open(PRESET_ROLES_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
 
     def save_roles(self):
-        with open(PRESET_ROLES_PATH, 'w', encoding='utf-8') as f:
-            json.dump(self.roles, f, ensure_ascii=False, indent=4)
+        # display/label内の:を,に置換
+        roles_to_save = []
+        for r in self.roles:
+            display = r['display'].replace(':', ',')
+            label = r['label'].replace(':', ',')
+            category = r.get('category', '').replace(':', ',')
+            roles_to_save.append({'display': display, 'label': label, 'category': category})
+        try:
+            with open(PRESET_ROLES_PATH, 'w', encoding='utf-8') as f:
+                json.dump(roles_to_save, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            QMessageBox.warning(self, "保存エラー", f"ロール保存に失敗: {e}")
 
     def refresh_tree(self):
-        # 一旦クリア
         self.tree_widget.clear()
-        # カテゴリー毎にグループ化
-        grouped_roles = {}
-        for role in self.roles:
-            cat = role.get('category', '未分類') or '未分類'
-            if cat not in grouped_roles:
-                grouped_roles[cat] = []
-            grouped_roles[cat].append(role)
-        # ツリーに反映
-        for cat, roles in grouped_roles.items():
-            cat_item = QTreeWidgetItem([cat])
+        # カテゴリーごとにグループ化
+        cats = {}
+        for r in self.roles:
+            cat = r.get('category', '未分類') or '未分類'
+            cats.setdefault(cat, []).append(r)
+        for cat, roles in sorted(cats.items()):
+            cat_item = QTreeWidgetItem([cat, "", ""])
             self.tree_widget.addTopLevelItem(cat_item)
-            for role in roles:
-                role_item = QTreeWidgetItem([cat, role['display'], role['label']])
+            for r in roles:
+                role_item = QTreeWidgetItem(["", r['display'], r['label']])
                 cat_item.addChild(role_item)
-        # ルートのカテゴリーが無い場合は「未分類」カテゴリーを作成
-        if '未分類' not in grouped_roles:
-            self.tree_widget.addTopLevelItem(QTreeWidgetItem(['未分類']))
+            cat_item.setExpanded(True)
+        self.tree_widget.expandAll()
 
     def add_category(self):
-        text, ok = QInputDialog.getText(self, "カテゴリー追加", "カテゴリー名:")
+        text, ok = QInputDialog.getText(self, "カテゴリー追加", "カテゴリー名を入力:")
         if ok and text:
-            # 既に存在するカテゴリー名かチェック
-            for i in range(self.tree_widget.topLevelItemCount()):
-                item = self.tree_widget.topLevelItem(i)
-                if item.text(0) == text:
-                    QMessageBox.warning(self, "エラー", "同名のカテゴリーが既に存在します")
-                    return
-            # 新規カテゴリーを追加
-            self.roles.append({'category': text})
+            # 既存カテゴリーに追加しない（空のカテゴリーはツリーのみ）
             self.refresh_tree()
 
     def edit_category(self):
         item = self.tree_widget.currentItem()
         if item and not item.parent():
-            cat = item.text(0)
-            text, ok = QInputDialog.getText(self, "カテゴリー編集", "カテゴリー名:", text=cat)
-            if ok and text:
-                # 既に存在するカテゴリー名かチェック
-                for i in range(self.tree_widget.topLevelItemCount()):
-                    other_item = self.tree_widget.topLevelItem(i)
-                    if other_item != item and other_item.text(0) == text:
-                        QMessageBox.warning(self, "エラー", "同名のカテゴリーが既に存在します")
-                        return
-                # カテゴリー名を変更
+            old_cat = item.text(0)
+            text, ok = QInputDialog.getText(self, "カテゴリー編集", "新しいカテゴリー名を入力:", text=old_cat)
+            if ok and text and text != old_cat:
                 for r in self.roles:
-                    if (r.get('category', '未分類') or '未分類') == cat:
+                    if (r.get('category', '未分類') or '未分類') == old_cat:
                         r['category'] = text
-                item.setText(0, text)
+                self.refresh_tree()
 
     def delete_category(self):
         item = self.tree_widget.currentItem()
@@ -267,4 +261,4 @@ class RoleEditorDialog(QDialog):
 
     def accept(self):
         self.save_roles()
-        super().accept()
+        super().accept() 

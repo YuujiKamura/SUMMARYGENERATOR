@@ -95,9 +95,32 @@ def safe_imread_with_temp(src_path):
     else:
         return cv2.imread(src_path)
 
-def augment_dataset(dataset_dir: Path, augment_num: int = 5):
+def clip_bbox01(bbox):
+    # bbox: [class_id, x, y, w, h] (YOLO normalized)
+    class_id, x, y, w, h = bbox
+    x = max(0.0, min(1.0, x))
+    y = max(0.0, min(1.0, y))
+    w = max(0.0, min(1.0, w))
+    h = max(0.0, min(1.0, h))
+    return [class_id, x, y, w, h]
+
+def augment_dataset(dataset_dir: Path, augment_num: int = 5, class_names = None):
     images_dir = dataset_dir / 'images' / 'train'
     labels_dir = dataset_dir / 'labels' / 'train'
+    # --- クラスリストをログ出力 ---
+    if class_names is not None:
+        print(f'[AUGMENT][INFO] クラスリスト: {class_names}')
+    else:
+        print('[AUGMENT][INFO] クラスリスト: 未指定')
+    # --- クラスリストを03_augment_generated.logに上書きで出力 ---
+    logs_dir = Path(__file__).parent.parent.parent / 'logs'
+    logs_dir.mkdir(exist_ok=True)
+    gen_log_path = logs_dir / '03_augment_generated.log'
+    with open(gen_log_path, 'w', encoding='utf-8') as logf:
+        if class_names is not None:
+            logf.write(f'[AUGMENT][INFO] クラスリスト: {class_names}\n')
+        else:
+            logf.write('[AUGMENT][INFO] クラスリスト: 未指定\n')
     for img_path in images_dir.glob('*.jpg'):
         # aug_で始まる画像はスキップ（多重拡張防止）
         if img_path.name.startswith('aug'):
@@ -120,18 +143,39 @@ def augment_dataset(dataset_dir: Path, augment_num: int = 5):
             if len(parts) != 5:
                 continue
             class_id, x, y, bw, bh = map(float, parts)
-            bboxes.append([int(class_id), x, y, bw, bh])
+            # ここでclip
+            clipped = clip_bbox01([int(class_id), x, y, bw, bh])
+            # さらに0.0～1.0範囲外やw/h<=0は除外
+            _, cx, cy, cw, ch = clipped
+            if not (0.0 <= cx <= 1.0 and 0.0 <= cy <= 1.0 and 0.0 < cw <= 1.0 and 0.0 < ch <= 1.0):
+                continue
+            bboxes.append(clipped)
+        # --- bboxが1つもなければスキップ ---
+        if not bboxes:
+            continue
+        # --- bboxのクラスIDとクラスリストの対応を03_augment_generated.logに追記 ---
+        if class_names is not None and bboxes:
+            with open(gen_log_path, 'a', encoding='utf-8') as logf:
+                for b in bboxes:
+                    cid = int(b[0])
+                    cname = class_names[cid] if 0 <= cid < len(class_names) else 'UNKNOWN'
+                    logf.write(f'[AUGMENT][INFO] 画像: {img_path.name} クラスID: {cid} → クラス名: {cname}\n')
         # --- 追加: 元データbboxが範囲外ならスキップ ---
         invalid_bboxes = [b for b in bboxes if not is_bbox_valid([b[1], b[2], b[3], b[4]])]
         print(f"[DEBUG] {img_path.name} チェック中 bbox: {bboxes} → 異常: {invalid_bboxes}")
         if invalid_bboxes:
             print(f"[警告] {img_path.name} のbboxに0.0～1.0範囲外の値が含まれるため、オーグメント処理をスキップします。対象bbox: {invalid_bboxes}")
             continue
+        # 以降はbboxesをvalid_bboxesとして使う
+        valid_bboxes = bboxes
+        valid_labels = [b[0] for b in valid_bboxes]
         for i in range(augment_num):
             if i == 0:
-                # 1回目は左右反転のみ
                 aug_image = cv2.flip(image, 1)
-                aug_bboxes = [horizontal_flip_bbox(b) for b in bboxes]
+                aug_bboxes = [horizontal_flip_bbox(b) for b in valid_bboxes]
+                # flip後もclip
+                aug_bboxes = [clip_bbox01(b) for b in aug_bboxes]
+                aug_bboxes = [b for b in aug_bboxes if 0.0 <= b[1] <= 1.0 and 0.0 <= b[2] <= 1.0 and 0.0 < b[3] <= 1.0 and 0.0 < b[4] <= 1.0]
                 aug_type = 'flip'
             else:
                 # 2回目以降は色変換・ノイズ系を多めに適用
@@ -156,15 +200,16 @@ def augment_dataset(dataset_dir: Path, augment_num: int = 5):
                 valid_bboxes = [[max(0.0, min(1.0, v)) for v in bb] for bb in valid_bboxes]
                 if not valid_bboxes or all(not all(0.0 <= float(x) <= 1.0 for x in bb) for bb in valid_bboxes):
                     continue
-                augmented = aug(image=image, bboxes=valid_bboxes, class_labels=valid_labels)
+                try:
+                    augmented = aug(image=image, bboxes=valid_bboxes, class_labels=valid_labels)
+                except Exception as e:
+                    print(f'[AUGMENT][ERROR] {img_path.name} augment失敗: {e}')
+                    continue
                 aug_image = augmented['image']
-                aug_bboxes = [[cl] + list(bb) for cl, bb in zip(augmented['class_labels'], augmented['bboxes'])]
-                for b in aug_bboxes:
-                    b[1:5] = np.clip(b[1:5], 0.0, 1.0)
-                aug_bboxes = [b for b in aug_bboxes if all(0.0 <= float(x) <= 1.0 for x in b[1:5])]
-                for b in aug_bboxes:
-                    for j in range(1, 5):
-                        b[j] = max(0.0, min(1.0, float(b[j])))
+                aug_bboxes = augmented['bboxes']
+                # clip
+                aug_bboxes = [clip_bbox01([lbl] + list(b)) for lbl, b in zip(valid_labels, aug_bboxes)]
+                aug_bboxes = [b for b in aug_bboxes if 0.0 <= b[1] <= 1.0 and 0.0 <= b[2] <= 1.0 and 0.0 < b[3] <= 1.0 and 0.0 < b[4] <= 1.0]
                 aug_type = 'color_noise'
             # bbox値をclip_bbox_with_imgsizeで補正
             aug_bboxes = [clip_bbox_with_imgsize(b, w, h) for b in aug_bboxes]
@@ -183,11 +228,7 @@ def augment_dataset(dataset_dir: Path, augment_num: int = 5):
             logs_dir = Path(__file__).parent.parent.parent / 'logs'
             logs_dir.mkdir(exist_ok=True)
             gen_log_path = logs_dir / '03_augment_generated.log'
-            if i == 0 and not gen_log_path.exists():
-                log_mode = 'w'
-            else:
-                log_mode = 'a'
-            with open(gen_log_path, log_mode, encoding='utf-8') as logf:
+            with open(gen_log_path, 'w', encoding='utf-8') as logf:
                 logf.write(f'[AUGMENT] type: {aug_type}, file: {aug_img_name}, bbox_count: {len(aug_bboxes)}\n')
             # DBにも登録
             db_bboxes = []
@@ -235,8 +276,7 @@ def augment_dataset_from_db(augment_num: int = 5):
         bboxes_yolo = [b for b in bboxes_yolo if is_bbox_valid_yolo(*b[1:5])]
         if not bboxes_yolo:
             log_path = Path(__file__).parent.parent.parent / 'logs' / '03_augment_invalid_bboxes.log'
-            log_mode = 'w' if not log_path.exists() else 'a'
-            with open(log_path, log_mode, encoding='utf-8') as logf:
+            with open(log_path, 'w', encoding='utf-8') as logf:
                 logf.write(f'[filename: {filename}] 無効bboxでスキップ\n')
                 logf.write(f'  image_path: {img_path}\n')
                 logf.write(f'  image size: w={w}, h={h}\n')

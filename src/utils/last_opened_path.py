@@ -30,4 +30,4 @@ def load_last_path(config_path: str, key: str) -> str | None:
             return data.get(key)
         except Exception as e:
             print(f"[last_opened_path] 読込エラー: {e}")
-    return None
+    return None 

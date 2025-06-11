@@ -14,7 +14,7 @@ from utils.image_utils import scan_folder_for_valid_images
 from pathlib import Path
 # from exporters.yolo_export import export_to_yolo
 from models import Annotation, ClassDefinition, AnnotationDataset, BoundingBox
-import io_utils
+from src.utils import io_utils
 import textwrap
 import shutil
 
@@ -300,7 +300,10 @@ class DetectResultWidget(QWidget):
         self.assignment = {}
         self.test_mode = test_mode
         self.save_dir = save_dir
-        self._settings_path = "detect_result_widget_settings.json"
+        logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../logs")
+        logs_dir = os.path.abspath(logs_dir)
+        os.makedirs(logs_dir, exist_ok=True)
+        self._settings_path = os.path.join(logs_dir, "detect_result_widget_settings.json")
         self.restore_window_settings()
         if not hasattr(self, '_restored_size') or not self._restored_size:
             self.resize(1200, 800)
@@ -394,17 +397,17 @@ class DetectResultWidget(QWidget):
 
     def restore_window_settings(self):
         try:
-            with open(self._settings_path, "r", encoding="utf-8") as f:
-                s = json.load(f)
-            if "size" in s:
-                self.resize(QSize(*s["size"]))
-                self._restored_size = True
-            else:
-                self._restored_size = False
-            if "pos" in s:
-                self.move(QPoint(*s["pos"]))
+            if os.path.exists(self._settings_path):
+                import json
+                with open(self._settings_path, "r", encoding="utf-8") as f:
+                    s = json.load(f)
+                if "size" in s:
+                    self.resize(*s["size"])
+                    self._restored_size = True
+                if "pos" in s:
+                    self.move(*s["pos"])
         except Exception:
-            self._restored_size = False
+            pass
 
     def save_window_settings(self):
         s = {
@@ -412,6 +415,7 @@ class DetectResultWidget(QWidget):
             "pos": [self.x(), self.y()]
         }
         with open(self._settings_path, "w", encoding="utf-8") as f:
+            import json
             json.dump(s, f, ensure_ascii=False, indent=2)
 
     def find_images_without_bboxes(self):

@@ -1,4 +1,3 @@
-# --- Copied from src/utils/location_utils.py ---
 import json
 import os
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QComboBox, QDialogButtonBox
@@ -36,4 +35,4 @@ class LocationInputDialog(QDialog):
         btn_box.rejected.connect(self.reject)
         vbox.addWidget(btn_box)
     def get_text(self):
-        return self.combo.currentText().strip()
+        return self.combo.currentText().strip() 
