@@ -14,6 +14,10 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from src.utils.path_manager import path_manager
 from src.utils.chain_record_utils import ChainRecord, load_chain_records
 from src.db_manager import ChainRecordManager, RoleMappingManager
+from src.services.dictionary_persistence_service import DictionaryPersistenceService
+from src.services.dictionary_record_service import DictionaryRecordService
+from src.services.dictionary_entry_service import DictionaryEntryService
+from src.services.dictionary_matching_service import DictionaryMatchingService
 # 類似度計算用ライブラリ
 try:
     from rapidfuzz import fuzz
@@ -93,7 +97,7 @@ KEYWORD_PATTERN = re.compile(
 
 
 class DictionaryManager(QObject):
-    """ユーザー辞書管理クラス"""
+    """ユーザー辞書管理クラス（ファサード）"""
 
     # シグナル定義
     dictionary_changed = pyqtSignal()  # 辞書変更時に発火
@@ -109,52 +113,21 @@ class DictionaryManager(QObject):
     # 類似度マッチングの閾値（0-100）
     MATCH_THRESHOLD = 70
 
-    def __init__(self, dictionary_path=None):
+    def __init__(self, db_path):
         """初期化
-
-        Args:
-            dictionary_path: 辞書ファイルのパス
         """
         super().__init__()
-        self.records = []
-        self.role_mappings = {}
-        self.current_project = None
-        self.dictionaries = {}
-        self._initialized = False
-        self.load_dictionaries()
-        if not self._initialized:
-            self.save_dictionaries()
-            self._initialized = True
-
-        # 保存用ディレクトリを準備
-        self._ensure_dictionary_dir()
-
-        # アクティブな辞書の設定を確認
-        active_dict_file = os.path.join(
-            self._get_dictionary_dir(),
-            "active_dictionary.json")
-        if os.path.exists(active_dict_file):
-            try:
-                with open(active_dict_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    active_dict = data.get("active")
-                    if active_dict:
-                        self.current_project = active_dict
-                        logging.info(f"アクティブな辞書を使用します: {active_dict}")
-            except Exception as e:
-                logging.error(f"アクティブ辞書の読み込みエラー: {e}")
-
-        # --- デバッグ: recordsファイルのパス・存在・件数を出力 ---
-        records_file = self._get_records_file()
-        print(f"[DEBUG] recordsファイルパス: {records_file}")
-        print(f"[DEBUG] recordsファイル存在: {os.path.exists(records_file)}")
-        # 辞書をロード
-        self.load_dictionaries()
-        print(f"[DEBUG] recordsロード件数: {len(self.records)}")
-        # --- 起動時に必ずDB登録内容をログ出力 ---
-        self.save_dictionaries()
-
-        # 辞書の内容をログに出力
+        self.db_path = db_path
+        self.records = []  # recordsを必ず初期化
+        self.role_mappings = {}  # role_mappingsも初期化
+        # サービス群を集約（全てにdb_pathを渡す）
+        self.persistence = DictionaryPersistenceService(self, db_path)
+        self.record_service = DictionaryRecordService(self, db_path)
+        self.entry_service = DictionaryEntryService(self, db_path)
+        self.matching_service = DictionaryMatchingService(self, db_path)
+        # DBベースで初期化
+        self.persistence.load_dictionaries()
+        self.persistence.save_dictionaries()
         self._log_dictionary_stats()
 
     # ----- レコード単位操作（新API） -----
@@ -168,29 +141,7 @@ class DictionaryManager(QObject):
         Returns:
             成功したかどうか
         """
-        record = ChainRecord.from_dict(record_dict)
-
-        # 重複チェック（正規化して比較）
-        for existing in self.records:
-            # すべての非空フィールドが一致する場合は重複とみなす
-            if (normalize(existing.category) == normalize(record.category) and
-                normalize(existing.type) == normalize(record.type) and
-                normalize(existing.subtype) == normalize(record.subtype) and
-                normalize(existing.remarks) == normalize(record.remarks) and
-                normalize(existing.station) == normalize(record.station) and
-                    normalize(existing.control) == normalize(record.control)):
-                return False
-
-        # レコード追加
-        self.records.append(record)
-
-        # 個別辞書も更新（後方互換性のため）
-        self._update_individual_dictionaries()
-
-        # 変更を通知
-        self.dictionary_changed.emit()
-
-        return True
+        return self.record_service.add_record(record_dict)
 
     def update_record(self, index: int, record_dict: Dict[str, str]) -> bool:
         """チェーンレコードの更新
@@ -202,20 +153,7 @@ class DictionaryManager(QObject):
         Returns:
             成功したかどうか
         """
-        if not (0 <= index < len(self.records)):
-            logging.error(f"無効なレコードインデックス: {index}")
-            return False
-
-        # レコード更新
-        self.records[index] = ChainRecord.from_dict(record_dict)
-
-        # 個別辞書も更新（後方互換性のため）
-        self._update_individual_dictionaries()
-
-        # 変更を通知
-        self.dictionary_changed.emit()
-
-        return True
+        return self.record_service.update_record(index, record_dict)
 
     def delete_record(self, index: int) -> bool:
         """チェーンレコードの削除
@@ -226,20 +164,7 @@ class DictionaryManager(QObject):
         Returns:
             成功したかどうか
         """
-        if not (0 <= index < len(self.records)):
-            logging.error(f"無効なレコードインデックス: {index}")
-            return False
-
-        # レコード削除
-        del self.records[index]
-
-        # 個別辞書も更新（後方互換性のため）
-        self._update_individual_dictionaries()
-
-        # 変更を通知
-        self.dictionary_changed.emit()
-
-        return True
+        return self.record_service.delete_record(index)
 
     def insert_record(self, index: int, record_dict: Dict[str, str]) -> bool:
         """指定した位置にレコードを挿入
@@ -251,22 +176,7 @@ class DictionaryManager(QObject):
         Returns:
             挿入に成功した場合はTrue、失敗した場合はFalse
         """
-        if not (0 <= index <= len(self.records)):
-            logging.error(f"無効なレコードインデックス: {index}")
-            return False
-
-        record = ChainRecord.from_dict(record_dict)
-
-        # レコードを挿入
-        self.records.insert(index, record)
-
-        # 個別辞書も更新（後方互換性のため）
-        self._update_individual_dictionaries()
-
-        # 変更を通知
-        self.dictionary_changed.emit()
-
-        return True
+        return self.record_service.insert_record(index, record_dict)
 
     # ----- 従来のAPI（後方互換性） -----
 
@@ -279,9 +189,7 @@ class DictionaryManager(QObject):
         Returns:
             エントリのリスト
         """
-        if dict_type in self.dictionaries:
-            return self.dictionaries[dict_type]
-        return []
+        return self.entry_service.get_entries(dict_type)
 
     def add_entry(self, dict_type: str, entry: str) -> bool:
         """辞書エントリを追加
@@ -293,25 +201,7 @@ class DictionaryManager(QObject):
         Returns:
             成功したかどうか
         """
-        if dict_type not in self.dictionaries:
-            logging.error(f"無効な辞書タイプ: {dict_type}")
-            return False
-
-        # 重複チェック
-        if entry in self.dictionaries[dict_type]:
-            return False
-
-        # 追加
-        self.dictionaries[dict_type].append(entry)
-        self.dictionaries[dict_type].sort()  # ソート
-
-        # レコードにも反映
-        self._update_records_from_dictionaries()
-
-        # 変更を通知
-        self.dictionary_changed.emit()
-
-        return True
+        return self.entry_service.add_entry(dict_type, entry)
 
     def remove_entry(self, dict_type: str, entry: str) -> bool:
         """辞書エントリを削除
@@ -323,23 +213,7 @@ class DictionaryManager(QObject):
         Returns:
             成功したかどうか
         """
-        if dict_type not in self.dictionaries:
-            logging.error(f"無効な辞書タイプ: {dict_type}")
-            return False
-
-        if entry not in self.dictionaries[dict_type]:
-            return False
-
-        # 削除
-        self.dictionaries[dict_type].remove(entry)
-
-        # レコードにも反映
-        self._update_records_from_dictionaries()
-
-        # 変更を通知
-        self.dictionary_changed.emit()
-
-        return True
+        return self.entry_service.remove_entry(dict_type, entry)
 
     def update_entry(
             self,
@@ -356,32 +230,15 @@ class DictionaryManager(QObject):
         Returns:
             成功したかどうか
         """
-        if dict_type not in self.dictionaries:
-            logging.error(f"無効な辞書タイプ: {dict_type}")
-            return False
-
-        # 古いエントリを削除し、新しいエントリを追加
-        if old_entry in self.dictionaries[dict_type]:
-            self.dictionaries[dict_type].remove(old_entry)
-            self.dictionaries[dict_type].append(new_entry)
-            self.dictionaries[dict_type].sort()  # ソート
-
-            # レコードにも反映
-            self._update_records_from_dictionaries()
-
-            # 変更を通知
-            self.dictionary_changed.emit()
-
-            return True
-
-        return False
+        return self.entry_service.update_entry(dict_type, old_entry, new_entry)
 
     def load_dictionaries(self) -> bool:
         """
         DBからChainRecord/ロールマッピングをロードし、self.records等にセットする。role_mapping.jsonも参照。
         """
-        import os
-        log_path = 'logs/A_dictionary_load.log'
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, 'A_dictionary_load.log')
         def log(msg, obj=None):
             with open(log_path, 'w', encoding='utf-8') as f:
                 if obj is not None:
@@ -390,8 +247,14 @@ class DictionaryManager(QObject):
                     f.write(msg + '\n')
         try:
             self.records = [ChainRecord.from_dict(r) for r in ChainRecordManager.get_all_chain_records()]
-            # --- ロールマッピングをDB＋JSONから統合ロード ---
-            db_role_mappings = {row['role_name']: json.loads(row['mapping_json']) for row in RoleMappingManager.get_all_role_mappings()}
+            # --- ロールマッピングをDB＋JSONから統合ロード（DB優先） ---
+            db_role_mappings = {}
+            for row in RoleMappingManager.get_all_role_mappings():
+                role_name = row.get('role_name')
+                mapping_json = row.get('mapping_json')
+                if role_name and mapping_json:
+                    db_role_mappings[role_name] = json.loads(mapping_json)
+            # JSONファイルも（あれば）ロード
             json_role_mapping_path = os.path.join(os.path.dirname(__file__), '../data/role_mapping.json')
             file_role_mappings = {}
             if os.path.exists(json_role_mapping_path):
@@ -437,7 +300,9 @@ class DictionaryManager(QObject):
         for role_name, mapping in self.role_mappings.items():
             RoleMappingManager.add_or_update_role_mapping(role_name, json.dumps(mapping, ensure_ascii=False))
         # --- ここで一度だけ全リストをログ出力（要素ごとに改行） ---
-        log_path = 'logs/A_dictionary_register.log'
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, 'A_dictionary_register.log')
         with open(log_path, 'w', encoding='utf-8') as f:
             f.write('A_CHAINRECORD_REGISTER_LIST [\n')
             for r in self.records:
@@ -456,78 +321,46 @@ class DictionaryManager(QObject):
         return True
 
     def set_project(self, project_name: str):
-        """現在の工事名を設定し、辞書を切り替える
-
-        Args:
-            project_name: 工事名
-        """
+        """現在の工事名を設定し、辞書を切り替える"""
         if not project_name:
             logging.error("プロジェクト名が指定されていません")
             return
-
-        # 同じ名前なら何もしない
-        if project_name == self.current_project:
+        if project_name == getattr(self, 'current_project', None):
             logging.info(f"既に '{project_name}' が設定されています")
             return
-
         # 現在の辞書を保存
-        self.save_dictionaries()
-
-        # 辞書ファイルの存在を確認
+        self.persistence.save_dictionaries()
         dict_dir = self._get_dictionary_dir()
         custom_dir = os.path.join(dict_dir, "custom")
-
-        # 候補となるファイルパスリスト
         dict_files = [
-            # 通常の辞書ファイル
             os.path.join(dict_dir, f"{project_name}_dictionary.json"),
-            # カスタム辞書
             os.path.join(custom_dir, f"{project_name}.json"),
-            # レガシーパス
             os.path.join(dict_dir, project_name, "dictionary.json")
         ]
-
-        # いずれかのファイルが存在するか確認
         exists = any(os.path.exists(path) for path in dict_files)
-
-        if not exists:
+        if not exists and project_name != "default":
             logging.warning(f"プロジェクト '{project_name}' の辞書ファイルが見つかりません")
-            # ただし、project_nameがdefaultの場合は常に許可
-            if project_name != "default":
-                return
-
-        # 工事名を変更
-        logging.info(f"辞書を切り替えました: {self.current_project} -> {project_name}")
+            return
+        logging.info(f"辞書を切り替えました: {getattr(self, 'current_project', None)} -> {project_name}")
         self.current_project = project_name
-
-        # 新しい工事の辞書をロード
-        self.load_dictionaries()
-
-        # 辞書の内容をログ出力
+        self.persistence.load_dictionaries()
         self._log_dictionary_stats()
 
     def reload_dictionaries(self):
         """辞書をリロード"""
-        # 現在の辞書を保存
-        self.save_dictionaries()
-
-        # 辞書を再ロード
-        self.load_dictionaries()
-
-        # 辞書の内容をログ出力
+        self.persistence.save_dictionaries()
+        self.persistence.load_dictionaries()
         self._log_dictionary_stats()
-
-        # 変更を通知
         self.dictionary_changed.emit()
 
     def _log_dictionary_stats(self):
         """辞書の統計情報をログに出力"""
         logging.info(f"辞書ファイル: {self._get_dictionary_file()}")
         logging.info(f"レコードファイル: {self._get_records_file()}")
-        logging.info(f"レコード数: {len(self.records)}")
-
+        logging.info(f"レコード数: {len(getattr(self, 'records', []))}")
         # 各タイプの項目数を出力
-        for dict_type, entries in self.dictionaries.items():
+        dicts = getattr(self, 'dictionaries', {})
+        for dict_type, entries in dicts.items():
             logging.info(f"  {dict_type} 項目数: {len(entries)}")
 
     # ----- マッチング機能 -----
@@ -541,51 +374,7 @@ class DictionaryManager(QObject):
         Returns:
             マッチング結果（辞書タイプ: マッチしたエントリ）
         """
-        if not text or not self.records:
-            return {}
-
-        # 1. キーワードベースのマッチング
-        keyword_results = self._keyword_match(text)
-        keyword_score = 0
-        if keyword_results:
-            # キーワードマッチのスコアを計算（マッチ数合計）
-            keyword_score = len(keyword_results)
-
-        # 2. ファジーマッチング（OCRテキストの各行・各フィールドで最大スコア）
-        best_record = None
-        best_score = 0
-        best_record_dict = None
-        ocr_lines = [normalize(line) for line in text.splitlines() if line.strip()]
-        for record in self.records:
-            record_dict = record.to_dict()
-            for field, value in record_dict.items():
-                if not value:
-                    continue
-                rec_val = normalize(str(value))
-                for ocr_line in ocr_lines:
-                    score = fuzz.partial_ratio(rec_val, ocr_line)
-                    if score > best_score:
-                        best_score = score
-                        best_record = record
-                        best_record_dict = record_dict
-        # 3. 完全一致（OCRテキストに完全一致するフィールドがあれば最優先）
-        for record in self.records:
-            record_dict = record.to_dict()
-            for field, value in record_dict.items():
-                if not value:
-                    continue
-                if str(value) in text:
-                    # 完全一致があれば即返す
-                    return {k: v for k, v in record_dict.items() if v}
-
-        # 4. 最良スコアのものを返す（キーワードマッチとファジーマッチを比較）
-        if best_score >= self.MATCH_THRESHOLD:
-            return {k: v for k, v in best_record_dict.items() if v}
-        elif keyword_results:
-            return keyword_results
-        else:
-            # どれも該当しない場合は空
-            return {}
+        return self.matching_service.match_text_with_dictionary(text)
 
     def record_has_keywords(self, record, keywords) -> bool:
         """
@@ -620,7 +409,7 @@ class DictionaryManager(QObject):
         hinshitsu_keywords = ["品質管理"]
         return self.record_has_keywords(record, hinshitsu_keywords)
 
-    def _best_match(self, text: str) -> tuple[Optional[ChainRecord], float]:
+    def _best_match(self, text: str):
         """最も良いマッチのレコードとスコアを返す
 
         Args:
@@ -629,35 +418,9 @@ class DictionaryManager(QObject):
         Returns:
             (最良マッチレコード, スコア) のタプル
         """
-        if not text or not self.records:
-            return None, 0
+        return self.matching_service._best_match(text)
 
-        # テキストを正規化
-        text_norm = normalize(text)
-
-        best_record = None
-        best_score = 0
-
-        for record in self.records:
-            # 各レコードのトークン（正規化済み）とマッチング
-            record_tokens = record.tokens()
-
-            if not record_tokens:
-                continue
-
-            # 最も高いスコアを保持
-            score = max(
-                fuzz.partial_ratio(text_norm, token)
-                for token in record_tokens
-            )
-
-            if score > best_score:
-                best_record = record
-                best_score = score
-
-        return best_record, best_score
-
-    def _legacy_match_text(self, text: str) -> Dict[str, str]:
+    def _legacy_match_text(self, text: str) -> dict:
         """従来の完全一致マッチング（フォールバック用）
 
         Args:
@@ -666,21 +429,9 @@ class DictionaryManager(QObject):
         Returns:
             マッチング結果（辞書タイプ: マッチしたエントリ）
         """
-        result = {}
+        return self.matching_service._legacy_match_text(text)
 
-        # 各辞書タイプに対して
-        for dict_type, entries in self.dictionaries.items():
-            # 辞書の各エントリに対して
-            for entry in entries:
-                # テキストに含まれているかチェック
-                if entry and entry in text:
-                    # マッチしたら結果に追加
-                    result[dict_type] = entry
-                    break
-
-        return result
-
-    def _extract_keywords(self, text: str) -> List[str]:
+    def _extract_keywords(self, text: str) -> list:
         """テキストからキーワードを抽出
 
         Args:
@@ -689,35 +440,9 @@ class DictionaryManager(QObject):
         Returns:
             抽出されたキーワードのリスト
         """
-        if not text:
-            return []
+        return self.matching_service._extract_keywords(text)
 
-        keywords = []
-
-        # まず特殊なパターン（H1=50、RM-40のような識別子）を抽出
-        special_patterns = re.findall(
-            r'([A-Za-z]+\d*[\-=]+\d+|[A-Za-z]+\d*\-[A-Za-z]+\d*)', text)
-        keywords.extend(special_patterns)
-
-        # 残りのテキストをスペース、カンマ、括弧などで分割
-        # 特殊パターンが抽出されたテキストを一時的に置換して分割
-        temp_text = text
-        for pattern in special_patterns:
-            temp_text = temp_text.replace(pattern, "")
-
-        words = re.split(r'[\s\.,;:()\[\]]+', temp_text)
-
-        for word in words:
-            if not word or len(word) < 2:  # 2文字未満は無視
-                continue
-
-            # 通常の単語を追加
-            keywords.append(word)
-
-        # 重複を削除して返す
-        return list(set(keywords))
-
-    def _keyword_match(self, text: str) -> Dict[str, str]:
+    def _keyword_match(self, text: str) -> dict:
         """キーワードベースのマッチング
 
         テキストから抽出したキーワードと辞書レコードのキーワードが一致するかを調べる
@@ -728,48 +453,7 @@ class DictionaryManager(QObject):
         Returns:
             マッチング結果（辞書タイプ: マッチしたエントリ）
         """
-        if not text or not self.records:
-            return {}
-
-        # テキストからキーワードを抽出
-        text_keywords = self._extract_keywords(text)
-        if not text_keywords:
-            return {}
-
-        # テキストキーワードを正規化（比較のため）
-        text_keywords_norm = {normalize(kw) for kw in text_keywords}
-
-        result = {}
-        best_matches = {}  # 各フィールドタイプごとの最良マッチを保存
-
-        # 各レコードを調査
-        for record in self.records:
-            record_dict = record.to_dict()
-            record_keywords = record.keywords()
-
-            # レコードのキーワードを正規化
-            record_keywords_norm = {normalize(kw) for kw in record_keywords}
-
-            # レコードの各フィールドを調査
-            for dict_type, value in record_dict.items():
-                if not value:
-                    continue
-
-                # テキストキーワードとレコードキーワードの重複を検出
-                matches = text_keywords_norm.intersection(record_keywords_norm)
-
-                # 一致があればそのフィールドを結果に追加
-                if matches:
-                    # より多くのキーワードがマッチする場合、または初めてのマッチングの場合
-                    match_count = len(matches)
-                    if dict_type not in best_matches or match_count > best_matches[dict_type][0]:
-                        best_matches[dict_type] = (match_count, value)
-
-        # 最良マッチを結果に追加
-        for dict_type, (_, value) in best_matches.items():
-            result[dict_type] = value
-
-        return result
+        return self.matching_service._keyword_match(text)
 
     def find_best_matches(
             self,
@@ -795,43 +479,56 @@ class DictionaryManager(QObject):
                     'ocr_line': str
                 }
         """
-        if not ocr_text or not self.records:
+        return self.matching_service.find_best_matches(ocr_text, fields, top_n, threshold)
+
+    # ----- ロールマッピング逆引きマッチングAPI（新設） -----
+
+    def match_remarks_by_roles(self, roles: list[str], match_mode: str = "") -> list[str]:
+        """
+        画像のrolesリストから、role_mappings（DB/JSON）を逆引きして該当remarks（工種名）を返す。
+        match_mode: "all"なら全て含む場合のみ、"any"なら1つでも含む場合。
+        指定なしならrole_mapping側のmatch条件を使う。
+        Returns: マッチしたremarks（工種名）のリスト
+        """
+        if not roles or not self.role_mappings:
             return []
-        if fields is None:
-            fields = [
-                "category",
-                "type",
-                "subtype",
-                "remarks",
-                "station",
-                "control"]
-        ocr_lines = [normalize(line)
-                     for line in ocr_text.splitlines() if line.strip()]
-        matches = []
-        for idx, record in enumerate(self.records):
-            best_score = 0
-            best_line = ""
-            best_field = ""
-            for field in fields:
-                field_value = normalize(getattr(record, field, ""))
-                if not field_value:
-                    continue
-                for ocr_line in ocr_lines:
-                    score = fuzz.partial_ratio(field_value, ocr_line)
-                    if score > best_score:
-                        best_score = score
-                        best_line = ocr_line
-                        best_field = field
-            if best_score >= threshold:
-                matches.append({
-                    "record_index": idx,
-                    "record": record,
-                    "score": best_score,
-                    "matched_field": best_field,
-                    "ocr_line": best_line
-                })
-        matches.sort(key=lambda x: x["score"], reverse=True)
-        return matches[:top_n]
+        matched_remarks = []
+        roles_set = set(roles)
+        for remarks, mapping in self.role_mappings.items():
+            mapping_roles = set(mapping.get("roles", []))
+            match = match_mode or mapping.get("match", "all")
+            if not mapping_roles:
+                continue
+            if match == "all":
+                if mapping_roles.issubset(roles_set):
+                    matched_remarks.append(remarks)
+            else:  # "any"
+                if mapping_roles & roles_set:
+                    matched_remarks.append(remarks)
+        return matched_remarks
+
+    def get_role_mapping_entries(self) -> list[dict]:
+        """
+        role_mappingsの全エントリを[{remarks, roles, match}]形式で返す（DB/JSON両対応）
+        """
+        result = []
+        for remarks, mapping in self.role_mappings.items():
+            result.append({
+                "remarks": remarks,
+                "roles": mapping.get("roles", []),
+                "match": mapping.get("match", "all")
+            })
+        return result
+
+    # ----- 個別辞書アクセス用プロパティ -----
+    @property
+    def dictionaries(self) -> dict:
+        """個別辞書（型: dict[str, list]）を取得。なければ空dictを返す"""
+        return getattr(self, '_dictionaries', {})
+
+    @dictionaries.setter
+    def dictionaries(self, value: dict):
+        self._dictionaries = value
 
     # ----- 内部ヘルパーメソッド -----
 

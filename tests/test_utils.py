@@ -208,4 +208,21 @@ def print_aligned_pairs(pairs_dict, keys=None, label_prefix='  ', sep=' : '):
     max_label_width = max(get_display_width(k) for k in keys)
     for k in keys:
         v = pairs_dict.get(k)
-        print(f"{label_prefix}{pad_display(k, max_label_width)}{sep}{v}") 
+        print(f"{label_prefix}{pad_display(k, max_label_width)}{sep}{v}")
+
+def setup_qt_test_environment():
+    """Qtテスト環境をセットアップ"""
+    import os
+    import sys
+    from PyQt6.QtWidgets import QApplication
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    os.environ["QT_LOGGING_TO_CONSOLE"] = "0"
+    os.environ["QT_FORCE_HEADLESS"] = "1"
+    if not QApplication.instance():
+        try:
+            app = QApplication(sys.argv)
+            return True
+        except Exception as e:
+            print(f"Qt環境のセットアップに失敗: {e}")
+            return False
+    return True

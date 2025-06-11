@@ -14,24 +14,6 @@ from PyQt6.QtWidgets import QMessageBox, QApplication
 from PyQt6.QtCore import QObject, pyqtSignal
 import warnings
 
-# test_utilsからの関数をインラインで定義
-def setup_qt_test_environment():
-    """Qtテスト環境をセットアップ"""
-    # ヘッドレスモードを設定
-    os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    os.environ["QT_LOGGING_TO_CONSOLE"] = "0"
-    os.environ["QT_FORCE_HEADLESS"] = "1"
-    
-    # QApplicationが存在しない場合のみ作成
-    if not QApplication.instance():
-        try:
-            app = QApplication(sys.argv)
-            return True
-        except Exception as e:
-            print(f"Qt環境のセットアップに失敗: {e}")
-            return False
-    return True
-
 # ルートディレクトリをPythonパスに追加
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -290,4 +272,4 @@ def mock_model_manager():
         def entries(self, category):
             return list(self.models.get(category, {}).items())
     
-    return MockModelManager() 
+    return MockModelManager()
