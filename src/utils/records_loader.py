@@ -27,7 +27,7 @@ def load_records_from_json(json_path):
     # 従来型（リスト of dict）
     else:
         result = records
-    print("DEBUG: load_records_from_json return type:", type(result), "first item type:", type(result[0]) if result else None)
+    # print("DEBUG: load_records_from_json return type:", type(result), "first item type:", type(result[0]) if result else None)
     return result
 
 
@@ -59,4 +59,4 @@ def save_records_to_json(json_path, records, as_reference=False):
             data = json.load(f)
         data["records"] = records
         with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2) 
+            json.dump(data, f, ensure_ascii=False, indent=2)
