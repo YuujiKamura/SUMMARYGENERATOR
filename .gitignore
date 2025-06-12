@@ -1,2 +1,33 @@
 # Ignore YOLO dataset output
 src/datasets/
+credential/
+# Pythonキャッシュ・ビルド生成物
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+# OS依存ファイル
+.DS_Store
+Thumbs.db
+# IDE/エディタ設定
+.vscode/
+.idea/
+# ログ・一時ファイル
+logs/
+*.log
+*.bak
+# DB・バイナリ
+src/yolo_data.db
+# 画像キャッシュ・中間生成物
+src/image_preview_cache/
+src/image_preview_cache_master.json
+# 設定・個人情報
+src/config.json
+src/image_preview_dialog_last.json
+src/data/image_list*.json
+src/data/dictionaries/
+# テスト一時ファイル
+*.tmp
+*.temp
+# その他
+runs/
