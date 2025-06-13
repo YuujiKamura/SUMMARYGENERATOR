@@ -21,7 +21,7 @@ truck_4t_loading_crushed_asphalt",role_driver_backhoe_pavement_load,,,,
 施工状況写真,舗装補修工,アスファルト舗装補修工,表層工,2次転圧状況,2,roller_tyres_3t,role_driver_tire_roller_3t,,,,surface_pavement
 品質管理写真,舗装補修工,アスファルト舗装補修工,表層工,As混合物 到着温度測定,1,,,caption_board_thermometer,role_measurer_thermometer,thermometer,
 品質管理写真,舗装補修工,アスファルト舗装補修工,表層工,As混合物 敷均し温度測定,1,,,caption_board_thermometer,role_measurer_thermometer,thermometer,
-品質管理写真,舗装補修工,アスファルト舗装補修工,表層工,As混合物 初期締固前温度,1,,,caption_board_thermometer,role_measurer_thermometer,thermometer,
+品質管理写真,舗装補修工,アスファルト舗装補修工,表層工,As混合物 初期締固前温度測定,1,,,caption_board_thermometer,role_measurer_thermometer,thermometer,
 品質管理写真,舗装補修工,アスファルト舗装補修工,表層工,As混合物 開放温度測定,1,,,caption_board_thermometer,role_measurer_thermometer,thermometer,
 安全管理写真,舗装補修工,アスファルト舗装補修工,,朝礼・安全ミーティング実施状況,1,,role_worker_meeting,,,,
 安全管理写真,舗装補修工,アスファルト舗装補修工,,規制配置・誘導員配置状況,1,,role_guardman,,,notice_sign_board,

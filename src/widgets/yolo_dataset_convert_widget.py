@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit, QMessageBox
 )
 from PyQt6.QtCore import Qt
-from src.yolo_dataset_exporter import YoloDatasetExporter
+from src.utils.yolo_dataset_exporter import YoloDatasetExporter
 from widgets.components.yolo_dataset_convert_form import YoloDatasetConvertForm
 from src.utils.path_manager import PathManager
 

@@ -52,7 +52,7 @@ if __name__ == "__main__":
                 else:
                     print("使い方: python run_image_preview_dialog.py <画像ファイルパス>")
                     sys.exit(1)
-            except Exception as e:
+            except (OSError, json.JSONDecodeError) as e:
                 print(f"使い方: python run_image_preview_dialog.py <画像ファイルパス> (エラー: {e})")
                 sys.exit(1)
         print(f"[INFO] 最後に開いた画像を復元して起動: {img_path}")

@@ -1,31 +1,30 @@
 from typing import Any, Iterable, Optional, List, Tuple, Dict
+from records import Record
 
-def get_remarks(record: Any) -> str:
+def get_match_val(record: Any) -> str:
     if isinstance(record, dict):
-        return record['key'][4]
-    return getattr(record, 'remarks', '')
+        return str(record.get('match', 'any')).strip().lower()
+    if hasattr(record, 'match'):
+        return str(getattr(record, 'match', 'any')).strip().lower()
+    return 'any'
 
-def get_number(record: Any) -> Any:
+def get_criteria(record: Any) -> List[str]:
     if isinstance(record, dict):
-        return record['key'][3]
-    return getattr(record, 'number', None)
-
-def get_category(record: Any) -> str:
-    if isinstance(record, dict):
-        return record['key'][0]
-    return getattr(record, 'photo_category', '') or ''
+        criteria = record['criteria']
+    else:
+        criteria = getattr(record, 'criteria', [])
+    if isinstance(criteria, str):
+        return [criteria.strip().lower()]
+    return [c.strip().lower() for c in criteria]
 
 def match_record_to_roles(record: Any, roles: Iterable[str]) -> Tuple[bool, List[str]]:
-    criteria = record['criteria']
-    if isinstance(criteria, str):
-        criteria = [criteria]
-    criteria = [c.strip().lower() for c in criteria]
-    roles_norm = {r.strip().lower() for r in roles if r}  # set化でO(1)
+    criteria = get_criteria(record)
+    roles_norm = {r.strip().lower() for r in roles if r}
     if not criteria:
         return False, []
-    found = list({c for c in criteria if c in roles_norm})  # 重複排除
-    match_val = str(record.get('match', 'any')).strip().lower()  # strip追加
-    if match_val.isdigit():  # 負数は不許容
+    found = list({c for c in criteria if c in roles_norm})
+    match_val = get_match_val(record)
+    if match_val.isdigit():
         result = len(found) >= int(match_val)
     elif match_val == 'any':
         result = len(found) > 0
@@ -40,7 +39,7 @@ def collect_match_candidates(records: List[Any], roles: Iterable[str]) -> List[T
     for rec in records:
         ok, found = match_record_to_roles(rec, roles)
         if ok:
-            match_val = str(rec.get('match', 'any')).strip().lower()  # strip追加
+            match_val = get_match_val(rec)
             candidates.append((rec, found, match_val))
     return candidates
 
@@ -50,13 +49,12 @@ def select_best_match(candidates: List[Tuple[Any, List[str], str]]) -> Optional[
 
 def match_images_and_records_normal(records, image_roles, formatter=None):
     """
-    画像ごとにfound数最大のものだけを返す（ただし品質管理写真は候補全て返す）
+    画像ごとにfound数最大のものだけを返す
     戻り値: [(img_path, record, found, match_val, formatted)]
     """
     results = []
     for img_path, roles in image_roles.items():
         candidates = collect_match_candidates(records, roles)
-        # 品質管理写真だけ特別処理は削除
         best = select_best_match(candidates)
         if best:
             record, found, match_val = best
@@ -71,8 +69,8 @@ def extract_temp_records(q_list):
     """
     temp_records = []
     for _, record, _, _, _ in q_list:
-        remarks = get_remarks(record)
-        number = get_number(record)
+        remarks = record.get_remarks()
+        number = record.get_number()
         if remarks and ('温度測定' in remarks or '温度' in remarks):
             temp_records.append((number, remarks, record))
     temp_records.sort(key=lambda x: (x[0] if x[0] is not None else '', x[1]))
@@ -85,8 +83,15 @@ def extract_temp_records_from_all(records):
     """
     temp_records = []
     for record in records:
-        remarks = get_remarks(record)
-        number = get_number(record)
+        if hasattr(record, 'get_remarks'):
+            remarks = record.get_remarks()
+            number = record.get_number()
+        elif isinstance(record, dict):
+            remarks = record.get('remarks', record['key'][4] if 'key' in record else '')
+            number = record.get('number', record['key'][3] if 'key' in record else None)
+        else:
+            remarks = getattr(record, 'remarks', '')
+            number = getattr(record, 'number', None)
         if remarks and ('温度測定' in remarks or '温度' in remarks):
             temp_records.append((number, remarks, record))
     temp_records.sort(key=lambda x: (x[0] if x[0] is not None else '', x[1]))
@@ -120,7 +125,7 @@ def find_record_by_remarks(q_list, target_remarks):
     """
     for t in q_list:
         record = t[1]
-        remarks = get_remarks(record)
+        remarks = record.get_remarks()
         if remarks == target_remarks:
             return t
     return None
@@ -149,16 +154,13 @@ def collect_temp_management_candidates(records: List[Any], image_roles: Dict[str
     for img_path in paths:
         roles = image_roles[img_path]
         candidates = collect_match_candidates(records, roles)
-        temp_candidates = [rec for rec, _, _ in candidates if any(k in get_remarks(rec) for k in ('温度管理', '温度測定', '温度'))]
+        temp_candidates = [rec for rec, _, _ in candidates if any(k in rec.get_remarks() for k in ('温度管理', '温度測定', '温度'))]
         temp_records.extend(temp_candidates)
     # 重複除去
     seen = set()
     unique_temp_records = []
     for rec in temp_records:
-        if isinstance(rec, dict):
-            key = tuple(rec['key'])
-        else:
-            key = (get_number(rec), get_remarks(rec))
+        key = (rec.get_number(), rec.get_remarks())
         if key not in seen:
             seen.add(key)
             unique_temp_records.append(rec)
@@ -176,7 +178,13 @@ def assign_qc_temperature_records_with_candidates(q_list, records, image_roles, 
     temp_records = [r[2] for r in extract_temp_records_from_all(records)]
     def find_by_kw(key):
         for r in temp_records:
-            if key in get_remarks(r):
+            if hasattr(r, 'get_remarks'):
+                remarks = r.get_remarks()
+            elif isinstance(r, dict):
+                remarks = r.get('remarks', r['key'][4] if 'key' in r else '')
+            else:
+                remarks = getattr(r, 'remarks', '')
+            if key in remarks:
                 return r
         return None
     rec_arrival = find_by_kw('到着温度')
@@ -203,7 +211,7 @@ def assign_qc_temperature_records_with_candidates(q_list, records, image_roles, 
         roles = image_roles[img_path]
         if rec is not None:
             result, found = match_record_to_roles(rec, roles)
-            match_val = str(rec.get('match', 'any')).strip().lower() if isinstance(rec, dict) else str(getattr(rec, 'match', 'any')).strip().lower()
+            match_val = str(getattr(rec, 'match', 'any')).strip().lower()
             formatted = formatter(rec, found, match_val) if formatter else str((rec, found, match_val))
         else:
             result, found, match_val = False, [], 'none'
@@ -218,7 +226,12 @@ def group_results_by_photo_category(results):
     """
     by_category = {}
     for img_path, record, found, match_val, formatted in results:
-        photo_category = get_category(record)
+        if hasattr(record, 'get_category'):
+            photo_category = record.get_category()
+        elif isinstance(record, dict):
+            photo_category = record.get('photo_category', '') or (record.get('key', [''])[0] if 'key' in record else '')
+        else:
+            photo_category = getattr(record, 'photo_category', '') or ''
         if photo_category not in by_category:
             by_category[photo_category] = []
         by_category[photo_category].append((img_path, record, found, match_val, formatted))

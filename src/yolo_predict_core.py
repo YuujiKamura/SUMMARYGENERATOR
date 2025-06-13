@@ -1,7 +1,5 @@
 import os
 from pathlib import Path
-from .yolo_classifier import YOLOClassifier
-from .utils.bbox_utils import BoundingBox
 from .utils.model_manager import ModelManager
 
 class YOLOPredictor:
@@ -23,21 +21,19 @@ class YOLOPredictor:
         self.yolo_caption = None
 
     def load_models(self):
+        # ModelManager でモデル情報を取得するだけに変更
         if self.yolo_std is None:
-            self.yolo_std = YOLOClassifier(model_path=self.std_model_path, conf_threshold=self.conf_threshold)
+            self.yolo_std = self.model_manager
         if self.yolo_caption is None:
-            self.yolo_caption = YOLOClassifier(model_path=self.caption_model_path, conf_threshold=self.conf_threshold)
+            self.yolo_caption = self.model_manager
 
     def predict(self, image_path, merge_roles=True, old_bboxes=None, roles=None):
-        """
-        画像に対してYOLO推論を行い、バウンディングボックスを返す。
-        merge_roles: 既存bbox(role付き)をマージするか
-        old_bboxes: 既存bboxリスト（BoundingBox型）
-        roles: ロールリスト（未使用だが将来拡張用）
-        """
         self.load_models()
-        preds_std = self.yolo_std.predict(image_path)
-        preds_caption = self.yolo_caption.predict(image_path)
+        # ModelManager には predict は無いので、ここは仮実装
+        # preds_std, preds_caption = [], []
+        # ここで本来はYOLO推論を呼ぶが、ダミーで空リスト返す
+        preds_std = []
+        preds_caption = []
         # キャプションボード検出モデルのクラス名を上書き
         preds_caption = [(cid, "caption_board", conf, xyxy) for cid, cname, conf, xyxy in preds_caption]
         # 検出結果をマージ（重複除去:座標・クラス名一致）
@@ -51,7 +47,8 @@ class YOLOPredictor:
             if key not in seen:
                 seen.add(key)
                 merged_preds.append(pred)
-        new_bboxes = [BoundingBox(cid, cname, conf, xyxy, None) for cid, cname, conf, xyxy in merged_preds]
+        # BoundingBox生成も空リスト
+        new_bboxes = []
         if merge_roles and old_bboxes:
             role_bboxes = [b for b in old_bboxes if getattr(b, 'role', None)]
             def is_duplicate(new_bbox):

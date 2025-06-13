@@ -4,6 +4,7 @@ from pathlib import Path
 from data_loader import load_records, load_image_roles
 from result_formatter import format_match_result
 from matcher import match_images_and_records, match_images_and_records_normal
+import os
 
 if __name__ == '__main__':
     records = load_records('data/records_and_roles.csv')
@@ -12,12 +13,10 @@ if __name__ == '__main__':
     print("\n=== [Normal Matching Results] ===")
     normal_results = match_images_and_records_normal(records, image_roles, formatter=format_match_result)
     for img_path, record, found, match_val, formatted in normal_results:
-        print(f"[IMAGE] {img_path}")
-        print(formatted)
+        print(f"[IMAGE] {os.path.basename(img_path)} | {formatted}")
     # その後カテゴリ別マッチング結果を出力
     results_by_category = match_images_and_records(records, image_roles, formatter=format_match_result)
     for category, results in results_by_category.items():
         print(f"\n=== {category} ===")
         for img_path, record, found, match_val, formatted in results:
-            print(f"[IMAGE] {img_path}")
-            print(formatted)
+            print(f"[IMAGE] {os.path.basename(img_path)} | {formatted}")

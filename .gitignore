@@ -12,6 +12,8 @@ Thumbs.db
 # IDE/エディタ設定
 .vscode/
 .idea/
+.venv/
+.specstory/
 # ログ・一時ファイル
 logs/
 *.log

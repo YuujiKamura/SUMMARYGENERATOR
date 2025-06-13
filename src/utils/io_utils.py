@@ -8,6 +8,6 @@ import shutil
 from typing import List, Dict, Optional, Tuple, Any
 import cv2
 
-from models import ClassDefinition, BoundingBox, Annotation, AnnotationDataset, IMAGE_EXTENSIONS
+from src.utils.models import ClassDefinition, BoundingBox, Annotation, AnnotationDataset, IMAGE_EXTENSIONS
 
 # ...（省略：PhotoCategorizer/src/io_utils.pyの内容をそのままコピー）...

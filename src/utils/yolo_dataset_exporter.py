@@ -4,7 +4,7 @@ import shutil
 import random
 from pathlib import Path
 from typing import Optional, List
-from summarygenerator.utils.path_manager import path_manager
+from src.utils.path_manager import path_manager
 
 class YoloDatasetExporter:
     def __init__(self, image_list_json_paths: List[str], output_dir: Optional[str] = None, val_ratio: float = 0.2):
@@ -221,4 +221,4 @@ class YoloDatasetExporter:
             # ... rest of the method ...
         except Exception as e:
             return str(e)
-        return None 
+        return None
