@@ -57,6 +57,29 @@
 - PyAutoGUIを利用しています。プロンプト表示位置の上に他のGUIウィンドウが被っている場合、正常に動作しません。
 - Copilotは、Cursorに「次に何をすれば良いか指示をお願いします」とsend_prompt.py経由で問い合わせてください。
 
+## YOLO自動学習・再学習バッチ運用について
+
+- `run_create_yolo_dataset_from_json.py` は、DB登録→YOLOデータセット生成→オーグメント→学習→推論→インコレクト抽出→再学習までを一括自動化できます。
+- コマンドライン引数で
+    - `--retrain-mode` : 再学習タイミング（`ask`=都度確認, `immediate`=すぐ, `night`=夜間バッチ推奨）
+    - `--retrain-loops` : 再学習ループ回数
+    - `--epoch-multiplier` : 再学習ごとのエポック数倍率
+  などを指定可能。
+- 初回学習後に自動で推論・インコレクト抽出を行い、失敗画像枚数を通知。再学習の実行・エポック数増加も対話式または自動で選択できます。
+- 夜間バッチ運用やImageListJobManagerとの連携で、完全自動化も可能です。
+
+### 例: 夜間バッチで自動学習
+```pwsh
+python run_create_yolo_dataset_from_json.py --retrain-mode night --retrain-loops 1 --epoch-multiplier 2
+```
+
+### 例: 対話式で即時再学習
+```pwsh
+python run_create_yolo_dataset_from_json.py --retrain-mode ask
+```
+
+- 詳細はスクリプト先頭のコメントやヘルプ（`-h`）を参照してください。
+
 ## 注意
 - テストやAI間通信のルールは `tests/README.md` に記載
 - 本READMEはプロジェクト全体の構成・概要ガイドです
