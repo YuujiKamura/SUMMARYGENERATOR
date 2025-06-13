@@ -295,11 +295,16 @@ class ImagePreviewDialog(QDialog):
             print(f"[共通キャッシュ復元] {self.img_path} bboxes: EMPTY")
 
     def save_bboxes_to_image_cache(self):
-        # 共通関数でキャッシュ保存
+        # 保存前に確認ダイアログを表示
+        ret = QMessageBox.question(self, "キャッシュ上書き確認", "この検出結果でキャッシュ（image_preview_cache）を上書きしますか？",
+                                   QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        if ret != QMessageBox.StandardButton.Ok:
+            self.status_label.setText("[LOG] 保存をキャンセルしました")
+            return False
         ok = save_image_cache(self.img_path, self.bboxes)
         if ok:
             print(f"[共通キャッシュ保存] {self.img_path} bboxes: {self.bboxes}")
-        # emitはここで行わない
+        return ok
 
     def update_image_with_bboxes(self):
         # self.labelの代わりにwidgetへ反映
@@ -346,7 +351,9 @@ class ImagePreviewDialog(QDialog):
 
     def save_and_emit(self):
         self.bboxes = self.image_widget.bboxes.copy()
-        self.save_bboxes_to_image_cache()
+        saved = self.save_bboxes_to_image_cache()
+        if not saved:
+            return
         self.save_last_image_path(self.img_path)
         self.image_json_saved.emit(self.img_path)  # emitはここだけ
         self.status_label.setText(f"[LOG] 保存・emit完了: {self.img_path}")
