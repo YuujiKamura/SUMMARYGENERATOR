@@ -31,30 +31,29 @@ class YoloPredictThread(QThread):
             import os
             self.output.emit(f"モデル: {self.model_path}\n画像フォルダ: {self.image_dir}\n信頼度閾値: {self.conf}")
             model = YOLO(self.model_path)
-            results = model.predict(source=self.image_dir, conf=self.conf, save=True, show=False)
-            # 結果保存先ディレクトリ取得（resultsはリスト）
-            if results and hasattr(results[0], 'save_dir'):
-                save_dir = str(results[0].save_dir)
-            else:
-                save_dir = 'runs/detect/predict'
-            self.output.emit(f"推論結果保存先: {save_dir}")
-            # 検出結果をCSVで保存
-            csv_path = os.path.join(save_dir, 'predict_results.csv')
-            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(['image', 'class_id', 'class_name', 'confidence', 'xmin', 'ymin', 'xmax', 'ymax'])
-                for r in results:
-                    img_name = os.path.basename(r.path) if hasattr(r, 'path') else ''
-                    names = r.names if hasattr(r, 'names') else {}
-                    if hasattr(r, 'boxes') and r.boxes is not None:
-                        for box in r.boxes:
-                            cls_id = int(box.cls[0]) if hasattr(box, 'cls') else -1
-                            conf = float(box.conf[0]) if hasattr(box, 'conf') else 0.0
-                            xyxy = box.xyxy[0].tolist() if hasattr(box, 'xyxy') else [0,0,0,0]
-                            class_name = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else str(cls_id)
-                            writer.writerow([img_name, cls_id, class_name, conf, *xyxy])
-            self.output.emit(f"検出結果CSV: {csv_path}")
-            self.finished.emit(0, save_dir)
+            results = model.predict(source=self.image_dir, conf=self.conf, save=False, show=False)
+            # save=FalseなのでCSVやruns/detect/predictは生成されない
+            # ここでresultsから直接検出結果をパースしてemit
+            parsed_results = []
+            for r in results:
+                img_path = r.path if hasattr(r, 'path') else None
+                names = r.names if hasattr(r, 'names') else {}
+                dets = []
+                if hasattr(r, 'boxes') and r.boxes is not None:
+                    for box in r.boxes:
+                        cls_id = int(box.cls[0]) if hasattr(box, 'cls') else -1
+                        conf = float(box.conf[0]) if hasattr(box, 'conf') else 0.0
+                        xyxy = box.xyxy[0].tolist() if hasattr(box, 'xyxy') else [0,0,0,0]
+                        class_name = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else str(cls_id)
+                        dets.append({'bbox': xyxy, 'class_name': class_name, 'confidence': conf})
+                parsed_results.append({'image_path': img_path, 'detections': dets})
+            # 検出結果を一時ファイルに保存してパスをemit（既存on_prediction_finishedの流れを崩さないため）
+            import tempfile, json
+            with tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8', suffix='.json') as tf:
+                json.dump(parsed_results, tf, ensure_ascii=False, indent=2)
+                temp_json_path = tf.name
+            self.output.emit(f"推論結果JSON: {temp_json_path}")
+            self.finished.emit(0, temp_json_path)
         except Exception as e:
             self.output.emit(f"推論エラー: {e}")
             self.finished.emit(1, str(e))
@@ -241,36 +240,51 @@ class YoloPredictWidget(QWidget):
 
     @pyqtSlot(int, str)
     def on_prediction_finished(self, return_code, result):
+        import os
+        from src.utils.path_manager import path_manager
         self.predict_btn.setEnabled(True)
         self.progress_bar.setVisible(False)
         if return_code == 0:
-            self.log_text.append(f"推論が完了しました\n結果フォルダ: {result}")
-            # --- 推論結果CSVをパースしてDetectResultWidgetで可視化 ---
-            csv_path = os.path.join(result, 'predict_results.csv')
-            if os.path.exists(csv_path):
+            self.log_text.append(f"推論が完了しました\n結果: {result}")
+            # --- 推論結果JSONをパースしてDetectResultWidgetで可視化 ---
+            if result.endswith('.json') and os.path.exists(result):
+                with open(result, 'r', encoding='utf-8') as f:
+                    parsed_results = json.load(f)
                 image_paths = []
                 bbox_dict = {}
-                with open(csv_path, 'r', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        img = row['image']
-                        img_path = os.path.join(result, 'labels', '..', img) if not os.path.isabs(img) else img
-                        bbox = [float(row['xmin']), float(row['ymin']), float(row['xmax']), float(row['ymax'])]
-                        det = {
-                            'bbox': bbox,
-                            'class_name': row['class_name'],
-                            'confidence': float(row['confidence'])
-                        }
-                        if img_path not in bbox_dict:
-                            bbox_dict[img_path] = []
-                            image_paths.append(img_path)
-                        bbox_dict[img_path].append(det)
+                for entry in parsed_results:
+                    img_path = entry.get('image_path')
+                    dets = entry.get('detections', [])
+                    if img_path:
+                        image_paths.append(img_path)
+                        bbox_dict[img_path] = dets
                 # DetectResultWidgetを表示
                 self.result_widget = DetectResultWidget()
                 self.result_widget.set_images(image_paths, bbox_dict)
+                # --- パスマネージャーで保存パスを取得 ---
+                from pathlib import Path
+                image_list_json = str(path_manager.last_images)
+                Path(image_list_json).parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    with open(image_list_json, "w", encoding="utf-8") as f:
+                        json.dump(image_paths, f, ensure_ascii=False, indent=2)
+                    print(f"[画像リスト保存] {image_list_json} ({len(image_paths)}件)")
+                    path_manager.current_image_list_json = image_list_json
+                except Exception as e:
+                    print(f"[画像リスト保存エラー] {e}")
                 self.result_widget.show()
+                # --- 検出結果もlast_detect_results.jsonに保存 ---
+                detect_result_json = os.path.join(os.path.dirname(__file__), '..', 'data', 'last_detect_results.json')
+                from pathlib import Path
+                Path(os.path.dirname(detect_result_json)).mkdir(parents=True, exist_ok=True)
+                try:
+                    with open(detect_result_json, "w", encoding="utf-8") as f:
+                        json.dump({'image_paths': image_paths, 'bbox_dict': bbox_dict}, f, ensure_ascii=False, indent=2)
+                    print(f"[検出結果保存] {detect_result_json} 画像: {len(image_paths)}件 bbox_dict: {len(bbox_dict)}件")
+                except Exception as e:
+                    print(f"[検出結果保存エラー] {e}")
             else:
-                self.log_text.append(f"[警告] predict_results.csvが見つかりません: {csv_path}")
+                self.log_text.append(f"[警告] 推論結果JSONが見つかりません: {result}")
         else:
             self.log_text.append(f"推論に失敗しました (コード: {return_code})\n{result}")
         self.save_settings()
