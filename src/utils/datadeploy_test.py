@@ -2,31 +2,20 @@ import sys
 import os
 # プロジェクトルート（PhotoCategorizer）をsys.pathに追加
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-from src.data_manager import DataManager
-from src.summary_generator import collect_image_data_from_cache
+from src.utils.image_data_manager import ImageDataManager
 import subprocess
 
 def run_datadeploy_test(dataset_json_path, cache_dir, use_thermo_special=True):
     """
-    DIで渡されたパスでDataManager/collect_image_data_from_cacheを使い、
-    データ流通の疎通テストを行う。printとexit codeで結果を返す。
+    dataset_json_path, cache_dirを使い、個別JSON群から直接集約して疎通テストを行う。
     """
     print(f"[datadeploy_test] dataset_json_path={dataset_json_path}")
     print(f"[datadeploy_test] cache_dir={cache_dir}")
     try:
-        dm = DataManager(
-            json_path=dataset_json_path,
-            folder_path=cache_dir,
-            use_thermo_special=use_thermo_special
-        )
-        dm.reload()
-        print("配備テストOK: 画像数=", len(dm.get_image_roles()))
-        print("フォルダ数=", len(dm.get_folder_names()))
-        print("レコード数=", len(dm.get_records()))
-        # 追加: 個別JSON群から直接集約
-        image_data = collect_image_data_from_cache(cache_dir)
-        print("個別JSON集約: 画像数=", len(image_data['image_roles']))
-        print("個別JSON集約: フォルダ数=", len(image_data['folder_names']))
+        # ImageDataManagerの_cache_json利用で疎通テスト
+        image_data = ImageDataManager()._load_all_cache_json(cache_dir)
+        print("個別JSON集約: 画像数=", len(image_data))
+        print("個別JSON集約: 画像パス例=", list(image_data.keys())[:3])
         return True
     except Exception as e:
         print("配備テストNG:", e)
@@ -80,4 +69,4 @@ if __name__ == "__main__":
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         DATASET_JSON_PATH = os.path.join(base_dir, "scan_for_images_dataset.json")
         CACHE_DIR = os.path.join(base_dir, "image_preview_cache")
-        run_datadeploy_test(DATASET_JSON_PATH, CACHE_DIR, use_thermo_special=True) 
+        run_datadeploy_test(DATASET_JSON_PATH, CACHE_DIR, use_thermo_special=True)

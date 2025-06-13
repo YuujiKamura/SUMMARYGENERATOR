@@ -1,7 +1,12 @@
 import os
 import json
+import unicodedata
 from PyQt6.QtCore import QObject, pyqtSignal
-from src.summary_generator import ROLE_MAPPING_PATH
+from src.utils.path_manager import PathManager
+
+# ROLE_MAPPING_PATHをpath_managerから取得
+path_manager = PathManager()
+ROLE_MAPPING_PATH = str(path_manager.role_mapping)
 
 class RoleMappingManager(QObject):
     role_mapping_changed = pyqtSignal(str)  # パス変更時に通知
@@ -58,3 +63,14 @@ def load_image_roles_from_cache(cache_dir):
         except Exception as e:
             print(f"[cache read error] {fpath}: {e}")
     return result
+
+def normalize_role_name(role: str) -> str:
+    """
+    ロール名を正規化（全角→半角、小文字化、前後空白除去など）
+    """
+    if not isinstance(role, str):
+        return ""
+    role = unicodedata.normalize('NFKC', role)
+    role = role.strip().lower()
+    # ここにtypo補正や追加ルールを必要に応じて追加
+    return role

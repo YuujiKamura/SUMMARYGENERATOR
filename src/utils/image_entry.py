@@ -10,7 +10,7 @@ class ImageEntry:
         self.cache_json = cache_json
         self.roles = roles or []
         self.debug_log: list[str] = []
-        print(f"[DEBUG][ImageEntry.__init__] image_path={self.image_path}, roles={self.roles}, chain_records={[getattr(r, 'remarks', None) for r in self.chain_records]}, id={id(self)}, cache_json_keys={list(self.cache_json.keys()) if self.cache_json else None}")
+        # print(f"[DEBUG][ImageEntry.__init__] image_path={self.image_path}, roles={self.roles}, chain_records={[getattr(r, 'remarks', None) for r in self.chain_records]}, id={id(self)}, cache_json_keys={list(self.cache_json.keys()) if self.cache_json else None}")
 
     @classmethod
     def from_cache_json(cls, image_path, cache_json, role_mapping, records):

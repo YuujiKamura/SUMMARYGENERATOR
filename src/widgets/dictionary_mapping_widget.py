@@ -8,15 +8,16 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from .role_selector import select_role_menu
 from .role_editor_dialog import RoleEditorDialog
 import threading
-from .utils.records_loader import load_records_from_json
-from .utils.path_manager import path_manager
-from .utils.datadeploy_test import run_datadeploy_test
+from src.utils.records_loader import load_records_from_json
+from src.utils.path_manager import path_manager
+from src.utils.datadeploy_test import run_datadeploy_test
 from src.utils.chain_record_utils import ChainRecord, load_chain_records
-from src.db_manager import ChainRecordManager
+from src.utils.role_mapping_utils import RoleMappingManager
+from src.db_manager import ChainRecordManager, RoleMappingManager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RECORDS_PATH = str(path_manager.default_records)
-ROLES_PATH = os.path.abspath(os.path.join(BASE_DIR, 'preset_roles.json'))
+ROLES_PATH = str(path_manager.data_dir / 'preset_roles.json')
 MAPPING_PATH = os.path.abspath(os.path.join(BASE_DIR, '../role_mapping.json'))
 
 DATASET_JSON_PATH = str(path_manager.scan_for_images_dataset)
@@ -96,7 +97,6 @@ class DictionaryMappingWidget(QWidget):
         self.on_entry_changed(0)
 
     def load_chain_records(self):
-        # DBからChainRecordを取得
         return [ChainRecord.from_dict(r) for r in ChainRecordManager.get_all_chain_records()]
 
     def load_roles(self):
@@ -104,16 +104,14 @@ class DictionaryMappingWidget(QWidget):
             return json.load(f)
 
     def load_mapping(self):
-        # DBからロールマッピングを取得
         rows = RoleMappingManager.get_all_role_mappings()
         mapping = {}
         for row in rows:
-            mapping[row['role_name']] = json.loads(row['mapping_json'])
+            mapping[row['role_name']] = json.loads(row['mapping_json']) if row['mapping_json'] else {}
         return mapping
 
-    def save_mapping(self):
-        # DBへロールマッピングを保存
-        for remarks, v in self.mapping.items():
+    def save_mapping(self, mapping):
+        for remarks, v in mapping.items():
             RoleMappingManager.add_or_update_role_mapping(remarks, json.dumps(v, ensure_ascii=False))
 
     def get_current_remarks(self):
@@ -129,7 +127,7 @@ class DictionaryMappingWidget(QWidget):
             self.mapping[remarks] = {"roles": roles, "match": match}
         elif remarks in self.mapping:
             del self.mapping[remarks]
-        self.save_mapping()
+        self.save_mapping(self.mapping)
 
     def on_entry_changed(self, idx):
         self.role_list.clear()
@@ -260,4 +258,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     w = DictionaryMappingWidget()
     w.show()
-    sys.exit(app.exec()) 
+    sys.exit(app.exec())

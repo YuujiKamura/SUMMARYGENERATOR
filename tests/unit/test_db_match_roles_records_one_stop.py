@@ -1,15 +1,19 @@
+import sys
 import os
+from pathlib import Path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
 import tempfile
 import pytest
 import gc
 from src.db_manager import init_db, ChainRecordManager, RoleMappingManager
 from src.utils.chain_record_utils import ChainRecord
-from src.record_matching_utils import match_roles_records_one_stop
+from src.utils.record_matching_utils import match_roles_records_one_stop
+from src.utils.role_mapping_utils import normalize_role_name
 import json
 
 def setup_test_db():
     tmp_db = tempfile.NamedTemporaryFile(delete=False, suffix='.db')
-    db_path = tmp_db.name
+    db_path = Path(tmp_db.name)
     tmp_db.close()
     init_db(db_path)
     return db_path
@@ -22,47 +26,41 @@ def teardown_test_db(db_path):
 def test_match_roles_records_one_stop_thermometer():
     db_path = setup_test_db()
     try:
-        # ChainRecord登録
-        cr_id = ChainRecordManager.add_chain_record('温度測定', '品質管理写真', None, db_path=db_path)
-        # role_mapping登録
+        cr_id = ChainRecordManager.add_chain_record('温度測定', None, '品質管理写真', None, db_path=db_path)
         RoleMappingManager.add_or_update_role_mapping('温度測定', '{"roles": ["thermometer"], "match": "any"}', db_path=db_path)
-        # DBから取得
-        records = ChainRecordManager.get_all_chain_records(db_path=db_path)
-        role_mapping = {row['role_name']: __import__('json').loads(row['mapping_json']) for row in RoleMappingManager.get_all_role_mappings(db_path=db_path)}
-        # テスト用img_json
+        records = ChainRecordManager.get_all_chain_records(db_path)
+        role_mapping = {normalize_role_name(row['role_name']): json.loads(row['mapping_json']) for row in RoleMappingManager.get_all_role_mappings(db_path)}
         img_json = {'roles': ['thermometer'], 'image_path': '/tmp/test1.jpg'}
         entry = match_roles_records_one_stop(img_json, role_mapping, [ChainRecord.from_dict(r) for r in records])
-        remarks = [r.remarks for r in entry.chain_records if r is not None]
-        assert '温度測定' in remarks
+        assert [r.remarks for r in entry.chain_records] == ['温度測定']
     finally:
-        teardown_test_db(db_path)
+        teardown_test_db(str(db_path))
 
 def test_match_roles_records_one_stop_caption_board():
     db_path = setup_test_db()
     try:
-        cr_id = ChainRecordManager.add_chain_record('出来形', '出来形管理写真', None, db_path=db_path)
+        cr_id = ChainRecordManager.add_chain_record('出来形', None, '出来形管理写真', None, db_path=db_path)
         RoleMappingManager.add_or_update_role_mapping('出来形', '{"roles": ["caption_board_thermometer"], "match": "any"}', db_path=db_path)
-        records = ChainRecordManager.get_all_chain_records(db_path=db_path)
-        role_mapping = {row['role_name']: __import__('json').loads(row['mapping_json']) for row in RoleMappingManager.get_all_role_mappings(db_path=db_path)}
+        records = ChainRecordManager.get_all_chain_records(db_path)
+        role_mapping = {normalize_role_name(row['role_name']): json.loads(row['mapping_json']) for row in RoleMappingManager.get_all_role_mappings(db_path)}
         img_json = {'roles': ['caption_board_thermometer'], 'image_path': '/tmp/test2.jpg'}
         entry = match_roles_records_one_stop(img_json, role_mapping, [ChainRecord.from_dict(r) for r in records])
-        remarks = [r.remarks for r in entry.chain_records if r is not None]
-        assert '出来形' in remarks
+        assert [r.remarks for r in entry.chain_records] == ['出来形']
     finally:
-        teardown_test_db(db_path)
+        teardown_test_db(str(db_path))
 
 def test_match_roles_records_one_stop_no_match():
     db_path = setup_test_db()
     try:
-        cr_id = ChainRecordManager.add_chain_record('出来形', '出来形管理写真', None, db_path=db_path)
+        cr_id = ChainRecordManager.add_chain_record('出来形', None, '出来形管理写真', None, db_path=db_path)
         RoleMappingManager.add_or_update_role_mapping('出来形', '{"roles": ["caption_board_thermometer"], "match": "any"}', db_path=db_path)
-        records = ChainRecordManager.get_all_chain_records(db_path=db_path)
-        role_mapping = {row['role_name']: __import__('json').loads(row['mapping_json']) for row in RoleMappingManager.get_all_role_mappings(db_path=db_path)}
+        records = ChainRecordManager.get_all_chain_records(db_path)
+        role_mapping = {normalize_role_name(row['role_name']): json.loads(row['mapping_json']) for row in RoleMappingManager.get_all_role_mappings(db_path)}
         img_json = {'roles': ['not_exist_role'], 'image_path': '/tmp/test3.jpg'}
         entry = match_roles_records_one_stop(img_json, role_mapping, [ChainRecord.from_dict(r) for r in records])
         assert [r for r in entry.chain_records if r is not None] == []
     finally:
-        teardown_test_db(db_path)
+        teardown_test_db(str(db_path))
 
 def import_role_mapping_json_to_db():
     import json
@@ -81,7 +79,7 @@ def test_db_realdata_role_matching():
     import_role_mapping_json_to_db()
     from src.db_manager import ChainRecordManager, RoleMappingManager
     from src.utils.chain_record_utils import ChainRecord
-    from src.record_matching_utils import match_roles_records_one_stop
+    from src.utils.record_matching_utils import match_roles_records_one_stop
     import json
     # 本番DBから全件取得（db_path指定なし）
     records = [ChainRecord.from_dict(r) for r in ChainRecordManager.get_all_chain_records()]
@@ -109,7 +107,7 @@ def test_db_real_image_data_role_matching():
     import_role_mapping_json_to_db()
     from src.db_manager import ChainRecordManager, RoleMappingManager
     from src.utils.chain_record_utils import ChainRecord
-    from src.record_matching_utils import match_roles_records_one_stop
+    from src.utils.record_matching_utils import match_roles_records_one_stop
     import json, os
     # DBから全件取得
     records = [ChainRecord.from_dict(r) for r in ChainRecordManager.get_all_chain_records()]
@@ -135,4 +133,4 @@ def test_db_real_image_data_role_matching():
             }, ensure_ascii=False) + '\n')
             # 主要なロールが含まれていれば必ず1件以上マッチするはず
             if any(r for r in roles if r in role_mapping):
-                assert len(matched_records) > 0, f"roles={roles} でマッチしない" 
+                assert len(matched_records) > 0, f"roles={roles} でマッチしない"

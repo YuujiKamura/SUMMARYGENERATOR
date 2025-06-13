@@ -81,3 +81,40 @@ def test_summary_excel_export_with_realdata(qtbot, app, temp_output_dir):
         # テスト用JSONとグローバル状態を復元
         path_manager.current_image_list_json = orig_current_json
         os.remove(temp_json)
+
+@pytest.mark.timeout(10)
+def test_summary_excel_export_with_db(qtbot, app, temp_output_dir):
+    """
+    SummaryGeneratorWidgetでDBからExcel出力が正しく行われるかE2Eテスト
+    """
+    widget = SummaryGeneratorWidget(test_mode=True)
+    qtbot.addWidget(widget)
+    widget.show()
+    qtbot.waitExposed(widget)
+
+    out_path = os.path.join(temp_output_dir, "test_summary_export_db.xlsx")
+    print(f"[E2E] DB→Excel出力先: {out_path}")
+    # 完了シグナルで待つ
+    with qtbot.waitSignal(widget.test_finished, timeout=20000):
+        widget.export_summary_to_path_db(out_path)
+    assert os.path.exists(out_path), f"Excelファイルが出力されていない: {out_path}"
+
+    # --- ここから温度管理写真のサイクル割り当てE2E検証 ---
+    wb = load_workbook(out_path)
+    ws = wb.active
+    headers = [cell.value for cell in ws[1]]
+    remarks_idx = headers.index('備考')
+    photo_cat_idx = headers.index('写真区分')
+    thermo_remarks = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[photo_cat_idx] == '品質管理写真':
+            thermo_remarks.append(row[remarks_idx])
+    from src.thermometer_utils import THERMO_REMARKS
+    n = len(thermo_remarks)
+    assert n >= 4, "温度管理写真が4枚以上必要です"
+    for i, rem in enumerate(thermo_remarks):
+        if n - i <= 3:
+            assert '開放温度' in rem, f"末尾3枚は開放温度であるべき: {rem}"
+        else:
+            expected = THERMO_REMARKS[i % 3]
+            assert rem == expected, f"{i+1}枚目: {rem} != {expected}"

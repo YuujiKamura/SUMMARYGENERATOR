@@ -4,6 +4,7 @@ import logging
 from .dekigata_judge import judge_dekigata_records
 from .image_entry import ImageEntry
 from .thermometer_utils import process_thermometer_records
+from .role_mapping_utils import normalize_role_name
 
 def is_thermometer_image(roles):
     return any(r and ("温度計" in r or "thermometer" in r) for r in roles)
@@ -44,18 +45,25 @@ def match_normal_roles_records(record, mapping, records):
         roles = []
     if roles is None:
         roles = []
+    # ここでrolesを正規化
+    norm_roles = set([normalize_role_name(r) for r in roles if r])
     matched = []
     for r in records:
-        entry = mapping.get(getattr(r, 'remarks', None) if hasattr(r, 'remarks') else r.get('remarks', None), {})
+        remarks = getattr(r, 'remarks', None) if hasattr(r, 'remarks') else r.get('remarks', None)
+        if not remarks:
+            continue
+        norm_remarks = normalize_role_name(str(remarks))
+        entry = mapping.get(norm_remarks, {})
         entry_roles = entry.get("roles", [])
         match_type = entry.get("match", "all")
         if not entry_roles:
             continue
+        norm_entry_roles = set([normalize_role_name(er) for er in entry_roles if er])
         if match_type == "all":
-            if all(role in roles for role in entry_roles) and len(entry_roles) > 0:
+            if norm_entry_roles and norm_entry_roles.issubset(norm_roles):
                 matched.append(r)
         else:
-            if any(role in roles for role in entry_roles):
+            if norm_entry_roles & norm_roles:
                 matched.append(r)
     return matched
 
@@ -88,7 +96,8 @@ def match_roles_records_one_stop(img_json, role_mapping, records, image_path=Non
         json_path=json_path or img_json.get('json_path', ''),
         chain_records=matched_records,
         location=img_json.get('location', None),
-        debug_text=img_json.get('debug_text', None)
+        debug_text=img_json.get('debug_text', None),
+        roles=list(all_roles)
     )
     entry.debug_log.append("[match_roles_records_one_stop] roles={} → matched_remarks={}".format(list(all_roles), [getattr(r, 'remarks', None) for r in matched_records]))
     return entry

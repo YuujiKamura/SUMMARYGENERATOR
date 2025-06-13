@@ -17,6 +17,7 @@ from .record_matching_utils import is_thermometer_image, is_thermometer_or_capti
 from .records_loader import load_records_from_json
 from .path_manager import path_manager
 from .chain_record_utils import ChainRecord, load_chain_records, find_chain_records_by_roles
+from src.utils.role_mapping_utils import load_role_mapping
 
 # --- 設定 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,7 +25,6 @@ RECORDS_PATH = str(path_manager.default_records)  # 分類辞書
 OUTPUT_PATH = os.path.abspath(os.path.join(BASE_DIR, '../output/summary_highres.xlsx'))
 IMG_WIDTH = 1280  # CALモード画像サイズ
 IMG_HEIGHT = 960
-ROLE_MAPPING_PATH = str(path_manager.role_mapping)
 CACHE_FILE_PREVIEW = os.path.abspath(os.path.join(BASE_DIR, 'detect_cache_preview.pkl'))
 
 DATASET_JSON_PATH = str(path_manager.scan_for_images_dataset)
@@ -38,31 +38,6 @@ log_dir = 'logs'
 os.makedirs(log_dir, exist_ok=True)
 logging.basicConfig(level=logging.DEBUG, filename=os.path.join(log_dir, "thermo_mapping_debug.log"), filemode="w", encoding="utf-8")
 logger = logging.getLogger(__name__)
-
-def load_role_mapping():
-    path = path_manager.role_mapping
-    print(f"[role_mapping] ロードパス: {path}")
-    if not path or not os.path.exists(path):
-        print(f"[role_mapping] ファイルが存在しません: {path}")
-        return {}
-    try:
-        with open(path, encoding='utf-8') as f:
-            content = f.read()
-            print(f"[role_mapping] ファイル内容:\n{content}")
-            # BOMチェック
-            if content and ord(content[0]) == 0xfeff:
-                print("[role_mapping] BOM（Byte Order Mark）が検出されました")
-            f.seek(0)
-            mapping = json.load(open(path, encoding='utf-8'))
-    except Exception as e:
-        print(f"[role_mapping] JSONパースエラー: {e}")
-        traceback.print_exc()
-        return {}
-    if not mapping:
-        print(f"[role_mapping] ロード内容が空です: {path}")
-    else:
-        print(f"[role_mapping] ロード成功: {len(mapping)}件")
-    return mapping
 
 def load_image_roles_from_cache_file(cache_dir="src/image_preview_cache"):
     """
@@ -86,7 +61,7 @@ def load_image_roles_from_cache_file(cache_dir="src/image_preview_cache"):
 
 def get_photo_category_from_remarks(remarks: str) -> str:
     rec = remarks_to_chain_record.get(remarks)
-    return rec.photo_category if rec else ''
+    return rec.photo_category if rec and rec.photo_category is not None else ''
 
 def match_image_to_records(image_json_dict, records, mapping=None):
     """
@@ -94,9 +69,8 @@ def match_image_to_records(image_json_dict, records, mapping=None):
     各画像のキャッシュJSONデータ（img_json, 1画像分のdict）をそのまま判定に渡す。
     image_json_dict: {image_path: img_json, ...}
     """
-    from summarygenerator.utils.record_matching_utils import match_roles_records_one_stop
+    from src.utils.record_matching_utils import match_roles_records_one_stop
     if mapping is None:
-        from summarygenerator.utils.summary_generator import load_role_mapping
         mapping = load_role_mapping()
     result = {}
     for img_path, img_json in image_json_dict.items():
@@ -265,7 +239,7 @@ if __name__ == "__main__":
     parser.add_argument("--test-datadeploy", action="store_true")
     args = parser.parse_args()
     if args.test_datadeploy:
-        from summarygenerator.utils.datadeploy_test import run_datadeploy_test
+        from src.utils.datadeploy_test import run_datadeploy_test
         from os.path import dirname, abspath, join
         BASE_DIR = dirname(abspath(__file__))
         DATASET_JSON_PATH = join(BASE_DIR, "scan_for_images_dataset.json")

@@ -5,7 +5,7 @@ from src.utils.image_entry import ImageEntry
 from src.utils.record_matching_utils import match_roles_records_one_stop
 from src.services.summary_data_service import SummaryDataService
 from src.dictionary_manager import DictionaryManager
-from src.utils.summary_generator import load_role_mapping
+from src.utils.role_mapping_utils import load_role_mapping
 from src.db_manager import ImageManager, BBoxManager, ChainRecordManager
 from src.utils.chain_record_utils import ChainRecord
 
@@ -18,7 +18,9 @@ class ImageDataManager:
         """
         DBから画像リスト・BBoxを取得し、ImageEntryリストを生成する。ログも出力。
         """
-        log_path = 'logs/A_dictionary_load.log'
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, 'A_dictionary_load.log')
         def log(msg, obj=None):
             with open(log_path, 'w', encoding='utf-8') as f:
                 if obj is not None:

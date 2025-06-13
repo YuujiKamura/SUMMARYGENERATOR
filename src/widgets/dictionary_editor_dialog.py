@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QStandardItemModel, QStandardItem
 
 # 依存: DictionaryManager
-from PhotoCategorizer.app.controllers.dictionary_manager import DictionaryManager
+from ..dictionary_manager import DictionaryManager
 from ..utils.records_loader import load_records_from_json, save_records_to_json
 
 PHOTO_CATEGORY_DEFAULTS = [
@@ -83,7 +83,7 @@ class DictionaryListEditorDialog(QDialog):
         # --- メインUI ---
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["写真区分", "ワークカテゴリー", "種別", "細別", "備考"])
+        self.table.setHorizontalHeaderLabels(["写真区分", "工種", "種別", "細別", "備考"])
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(self.table.EditTrigger.NoEditTriggers)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)

@@ -168,12 +168,6 @@ def run_around_tests():
         except:
             pass 
 
-@pytest.fixture
-def qtbot(request):
-    """QtBotインスタンスを提供"""
-    from pytestqt.qtbot import QtBot
-    return QtBot(request) 
-
 # 必要に応じてフィクスチャーを追加
 @pytest.fixture
 def mock_settings():

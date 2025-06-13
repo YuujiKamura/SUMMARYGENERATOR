@@ -113,6 +113,11 @@ def main():
     if db_path.exists():
         db_path.unlink()
         print(f'[INFO] モデルトレーニング用DBファイルを削除しました: {db_path.resolve()}')
+    # yolo_data.db も削除
+    yolo_db_path = Path(__file__).parent / 'src' / 'yolo_data.db'
+    if yolo_db_path.exists():
+        yolo_db_path.unlink()
+        print(f'[INFO] YOLO用DBファイルを削除しました: {yolo_db_path.resolve()}')
     shutil.rmtree(workdir, ignore_errors=True)
     print(f'[INFO] 一時ワークディレクトリを削除しました: {workdir.resolve()}')
 

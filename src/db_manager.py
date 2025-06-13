@@ -2,6 +2,7 @@ import sqlite3
 from pathlib import Path
 from typing import List, Optional, Any, Dict
 import json
+from src.utils.role_mapping_utils import normalize_role_name
 
 DB_PATH = Path(__file__).resolve().parent / "yolo_data.db"
 JSON_PATH = Path(__file__).resolve().parent / "data" / "image_preview_cache_master.json"
@@ -79,6 +80,13 @@ def init_db(db_path: Path = DB_PATH):
                 role_id INTEGER,
                 FOREIGN KEY(image_id) REFERENCES images(id),
                 FOREIGN KEY(role_id) REFERENCES roles(id)
+            )
+        ''')
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS role_mappings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_name TEXT UNIQUE,
+                mapping_json TEXT
             )
         ''')
         # UNIQUE制約インデックス
@@ -168,8 +176,8 @@ class RoleManager:
 
 class ChainRecordManager:
     @staticmethod
-    def get_all_chain_records() -> List[Dict[str, Any]]:
-        with DBConnection() as conn:
+    def get_all_chain_records(db_path=DB_PATH) -> List[Dict[str, Any]]:
+        with DBConnection(db_path) as conn:
             cur = conn.execute("SELECT * FROM chain_records")
             return [dict(row) for row in cur.fetchall()]
     @staticmethod
@@ -220,6 +228,8 @@ class RoleMappingManager:
 
     @staticmethod
     def add_or_update_role_mapping(role_name: str, mapping_json: str, db_path=DB_PATH) -> int:
+        # ここでrole_nameを正規化
+        role_name = normalize_role_name(role_name)
         with DBConnection(db_path) as conn:
             cur = conn.execute(
                 "INSERT INTO role_mappings (role_name, mapping_json) VALUES (?, ?) ON CONFLICT(role_name) DO UPDATE SET mapping_json=excluded.mapping_json",
@@ -228,7 +238,7 @@ class RoleMappingManager:
             conn.commit()
             cur = conn.execute("SELECT id FROM role_mappings WHERE role_name = ?", (role_name,))
             row = cur.fetchone()
-            return row["id"] if row else None
+            return row["id"] if row else -1
 
     @staticmethod
     def delete_role_mapping(role_name: str, db_path=DB_PATH) -> None:
@@ -280,4 +290,4 @@ def reset_all_tables(db_path=DB_PATH):
         conn.execute('DELETE FROM image_roles')
         conn.execute('DELETE FROM image_chain_assignments')
         conn.execute('DELETE FROM role_mappings')
-        conn.commit() 
+        conn.commit()
