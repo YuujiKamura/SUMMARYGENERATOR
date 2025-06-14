@@ -28,6 +28,8 @@ src/config.json
 src/image_preview_dialog_last.json
 src/data/image_list*.json
 src/data/dictionaries/
+data/
+src/data/
 # テスト一時ファイル
 *.tmp
 *.temp
