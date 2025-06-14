@@ -1363,12 +1363,11 @@ if __name__ == "__main__":
     # コマンドラインからの実行をサポート
     import argparse
     import threading
-    
     # ロギング設定
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    # logging.basicConfig(
+    #     level=logging.INFO,
+    #     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    # )
     
     parser = argparse.ArgumentParser(description="自動アノテーションツール")
     parser.add_argument("--input", required=True, help="入力画像フォルダ")
@@ -1444,4 +1443,4 @@ if __name__ == "__main__":
         sys.exit(0)
     else:
         print("失敗しました。")
-        sys.exit(1) 
+        sys.exit(1)

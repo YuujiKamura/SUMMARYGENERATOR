@@ -2,30 +2,22 @@ import sys
 import os
 import json
 from pathlib import Path
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QCheckBox, QHBoxLayout, QApplication, QMessageBox, QStatusBar
-from PyQt6.QtGui import QPixmap, QPainter, QColor
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread
+from PyQt6.QtWidgets import QDialog, QApplication, QMessageBox, QVBoxLayout
+from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtGui import QPixmap
 from src.utils.bbox_utils import BoundingBox
-from src.widgets.role_editor_dialog import RoleEditorDialog
-import importlib
-from src.widgets.image_display_widget import ImageDisplayWidget
-from src.utils.location_utils import LocationInputDialog, load_location_history, save_location_history
-from src.widgets.single_label_maker_dialog import SingleLabelMakerDialog
-from src.utils.last_opened_path import save_last_path, load_last_path
-from src.utils.path_manager import path_manager
-from src.widgets.model_selector_widget import ModelSelectorWidget
-from src.widgets.image_preview_data_load_thread import ImagePreviewDataLoadThread
-from src.widgets.image_preview_utils import save_image_cache_with_location
-from src.widgets.image_preview_box_ops import handle_box_right_clicked
-from src.widgets.image_preview_json_utils import restore_bboxes_from_cache, save_bboxes_to_image_cache, show_current_json
-from src.widgets.image_preview_role_utils import load_roles as ext_load_roles, load_last_image_path as ext_load_last_image_path, save_last_image_path as ext_save_last_image_path
-from src.widgets.image_preview_event_handlers import wheel_event, mouse_press_event, close_event, accept as ext_accept, reject as ext_reject, done as ext_done
 from src.services.yolo_service import YoloWorker
 from src.services.cache_service import CacheService
 from src.services.pixmap_loader import PixmapLoaderService
 from src.ui.components.zoomable_mixin import ZoomableMixin
-from src.ui.components.ui_action_loader import load_actions_yaml
 from src.ui.components.image_preview_ui_builder import build_image_preview_ui
+from src.widgets.image_preview_data_load_thread import ImagePreviewDataLoadThread
+from src.widgets.image_preview_json_utils import restore_bboxes_from_cache, save_bboxes_to_image_cache, show_current_json
+from src.widgets.image_preview_box_ops import handle_box_right_clicked
+from src.widgets.image_preview_role_utils import load_roles as ext_load_roles, load_last_image_path as ext_load_last_image_path, save_last_image_path as ext_save_last_image_path
+from src.widgets.image_preview_event_handlers import mouse_press_event, close_event, accept as ext_accept, reject as ext_reject, done as ext_done
+from src.utils.location_utils import LocationInputDialog, load_location_history, save_location_history
+from src.utils.path_manager import path_manager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = str(path_manager.image_cache_dir)
@@ -34,6 +26,9 @@ CONFIG_PATH = os.path.abspath(os.path.join(BASE_DIR, "image_preview_dialog_last.
 DATASET_JSON_PATH = str(path_manager.scan_for_images_dataset)
 
 class ImagePreviewDialog(QDialog, ZoomableMixin):
+    """
+    ImagePreviewDialog: 画像プレビューとYOLO検出・編集ダイアログ
+    """
     # --- ズーム・リサイズ設定 ---
     ZOOM_LEVELS = [0.5, 1.0, 1.5]  # 小・中・大
     RESIZE_DEBOUNCE_MS = 50  # リサイズ反応速度（ミリ秒）
@@ -104,8 +99,8 @@ class ImagePreviewDialog(QDialog, ZoomableMixin):
         self.image_widget.set_bboxes(self.bboxes)
         self.image_widget.set_roles(self.roles)
         self.image_widget.set_selected_indices(self.selected_indices)
-        self.image_widget._pixmap = self._pixmap
-        self.image_widget._orig_size = self._orig_size
+        self.image_widget._pixmap = self._pixmap  # pylint: disable=protected-access
+        self.image_widget._orig_size = self._orig_size  # pylint: disable=protected-access
         self.image_widget.update()
         # ズーム倍率を考慮した表示サイズ
         scaled_w = int(self._orig_size[0] * self._zoom_scale)
@@ -239,31 +234,29 @@ class ImagePreviewDialog(QDialog, ZoomableMixin):
 
     def open_role_editor(self):
         import importlib
-        import sys
         if 'src.role_editor_dialog' in sys.modules:
             importlib.reload(sys.modules['src.role_editor_dialog'])
         else:
             from src.widgets.role_editor_dialog import RoleEditorDialog
         RoleEditorDialog = sys.modules['src.role_editor_dialog'].RoleEditorDialog
-        dlg = RoleEditorDialog(self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        dlg_local = RoleEditorDialog(self)
+        if dlg_local.exec() == QDialog.DialogCode.Accepted:
             self.roles = self.load_roles()
             self.image_widget.set_roles(self.roles)
             self.update_image_with_bboxes()
 
     def open_single_label_maker(self):
-        # 直接importして参照する形に修正
         from src.widgets.single_label_maker_dialog import SingleLabelMakerDialog
         preset_path = str(path_manager.preset_roles)
         try:
             with open(preset_path, 'r', encoding='utf-8') as f:
                 class_list = json.load(f)
-        except Exception as e:
-            QMessageBox.warning(self, "エラー", f"クラスリストの読込に失敗しました: {e}")
+        except Exception as exc:
+            QMessageBox.warning(self, "エラー", f"クラスリストの読込に失敗しました: {exc}")
             return
-        dlg = SingleLabelMakerDialog(self.img_path, class_list, self, bboxes=self.bboxes)
-        dlg.image_json_saved.connect(lambda _: self.image_json_saved.emit(self.img_path))
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        dlg_local = SingleLabelMakerDialog(self.img_path, class_list, self, bboxes=self.bboxes)
+        dlg_local.image_json_saved.connect(lambda _: self.image_json_saved.emit(self.img_path))
+        if dlg_local.exec() == QDialog.DialogCode.Accepted:
             # キャッシュからbboxesを再読込し、再描画
             self.restore_bboxes_from_cache()
             self.update_image_with_bboxes()
@@ -275,9 +268,9 @@ class ImagePreviewDialog(QDialog, ZoomableMixin):
         show_current_json(self)
 
     def assign_location(self):
-        dlg = LocationInputDialog(self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            text = dlg.get_text()
+        dlg_local = LocationInputDialog(self)
+        if dlg_local.exec() == QDialog.DialogCode.Accepted:
+            text = dlg_local.get_text()
             if text:
                 history = load_location_history()
                 if text in history:
@@ -285,10 +278,9 @@ class ImagePreviewDialog(QDialog, ZoomableMixin):
                 history.insert(0, text)
                 history = history[:20]
                 save_location_history(history)
-                ok = self.cache.save_location(self.img_path, text)
+                self.cache.save_location(self.img_path, text)
                 self.status_label.setText(f"測点（location）を割り当てました: {text}")
                 self._update_location_label()
-                # emitはここで行わない
 
 def load_last_image_path():
     return ext_load_last_image_path(CONFIG_PATH)
@@ -311,6 +303,6 @@ if __name__ == "__main__":
 
     app = QApplication(sys.argv)
     image_path = sys.argv[1] if len(sys.argv) > 1 else load_last_image_path() or "test.jpg"
-    dlg = ImagePreviewDialog(image_path)
+    dlg_main = ImagePreviewDialog(image_path)
     save_last_image_path(image_path)
-    dlg.exec()
+    dlg_main.exec()

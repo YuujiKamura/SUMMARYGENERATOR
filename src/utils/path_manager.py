@@ -37,6 +37,8 @@ class PathManager:
         self.project_root = self.src_dir.parent
         # data_dir: src/data
         self.data_dir = self.src_dir / "data"
+        # retrain_dir: src/data/retrain
+        self.retrain_dir = self.data_dir / "retrain"
 
     @property
     def role_mapping(self) -> Path:
@@ -289,6 +291,15 @@ class PathManager:
     @property
     def image_cache_dir(self) -> Path:
         return self.src_dir / "image_preview_cache"
+
+    def get_retrain_data_dir(self) -> Path:
+        """再学習用データディレクトリのパスを取得"""
+        return self.retrain_dir
+
+    @property
+    def yolo_db(self) -> Path:
+        """YOLO用DBファイル（yolo_data.db）の絶対パスを返す"""
+        return self.project_root / "yolo_data.db"
 
 # グローバルインスタンス
 path_manager = PathManager()

@@ -8,10 +8,8 @@ import random
 from src.utils.bbox_normalizer import convert_bbox_to_yolo
 from src.utils.path_manager import PathManager
 
-DB_PATH = Path(__file__).parent / 'model_training_cache.db'
-
-def fetch_all_records():
-    conn = sqlite3.connect(DB_PATH)
+def fetch_all_records(db_path):
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute('SELECT filename, image_path, bboxes FROM image_cache')
     rows = c.fetchall()
@@ -20,34 +18,30 @@ def fetch_all_records():
 
 def safe_imread_with_temp(src_path):
     """
-    日本語・全角記号を含むパスの場合、C:\\temp_yolo_imagesに一時コピーし、
+    常にC:/temp_yolo_imagesに一時コピーし、
     半角英数字ファイル名でcv2.imreadする。
     """
     import cv2
     import shutil
-    import re
+    import string
+    import random
     src_path = str(src_path)
-    # 全角文字や日本語が含まれるか判定
-    if re.search(r'[^\x00-\x7F]', src_path):
-        temp_dir = Path('C:/temp_yolo_images')
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        # ランダムな半角英数字ファイル名を生成
-        ext = Path(src_path).suffix
-        randname = ''.join(random.choices(string.ascii_letters + string.digits, k=16)) + ext
-        temp_path = temp_dir / randname
-        try:
-            shutil.copy2(src_path, temp_path)
-            img = cv2.imread(str(temp_path))
-            temp_path.unlink(missing_ok=True)
-            return img
-        except Exception as e:
-            print(f'[警告] テンポラリコピー失敗: {src_path} → {temp_path} ({e})')
-            return None
-    else:
-        return cv2.imread(src_path)
+    temp_dir = Path('C:/temp_yolo_images')
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(src_path).suffix
+    randname = ''.join(random.choices(string.ascii_letters + string.digits, k=16)) + ext
+    temp_path = temp_dir / randname
+    try:
+        shutil.copy2(src_path, temp_path)
+        img = cv2.imread(str(temp_path))
+        temp_path.unlink(missing_ok=True)
+        return img
+    except Exception as e:
+        print(f'[警告] テンポラリコピー失敗: {src_path} → {temp_path} ({e})')
+        return None
 
 class YoloDatasetBuilder:
-    def __init__(self, out_dir=None):
+    def __init__(self, out_dir=None, db_path=None):
         import cv2
         if out_dir is None:
             out_dir = Path(__file__).parent.parent / 'datasets' / 'yolo_dataset_from_db'
@@ -56,7 +50,10 @@ class YoloDatasetBuilder:
         self.labels_dir = self.out_dir / 'labels' / 'train'
         self.images_dir.mkdir(parents=True, exist_ok=True)
         self.labels_dir.mkdir(parents=True, exist_ok=True)
-        self.records = fetch_all_records()
+        if db_path is None:
+            db_path = Path(__file__).parent / 'model_training_cache.db'
+        self.db_path = str(db_path)
+        self.records = fetch_all_records(self.db_path)
         self.dump_records = []
         self.debug_log_path = Path(__file__).parent / 'db_to_yolo_dataset_debug.log'
         self.image_bboxes = []  # [{filename, image_path, bboxes: [dict]}]

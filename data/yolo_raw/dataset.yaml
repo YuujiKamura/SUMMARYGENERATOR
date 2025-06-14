@@ -1,0 +1,4 @@
+train: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\data\yolo_raw\images\train
+val: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\data\yolo_raw\images\train
+nc: 28
+names: ['roller_conbined_2.5t', 'roller_tyres_3t', 'truck_4t_loading_asphalt', 'truck_4t_loading_soil', 'asphaltfinisher', 'backhoe_mini', 'role_worker_emulsion_spray', 'role_worker_emulsion_edge', 'role_worker_surface_level', 'role_worker_unload_soil', 'role_worker_sand_curing', 'new_alminium_rod', 'thermometer', 'role_measurer_staff_setdown', 'role_measurer_staff_asphalt_break_thickness', 'role_measurer_staff_soil_thickness', 'role_measurer_thermometer', 'role_driver_tire_roller_3t', 'role_driver_asphaltfinisher', 'role_driver_combined_roller', 'role_driver_backhoe_level', 'role_driver_backhoe_break', 'new_al_rod_soil_thickness', 'surface_crushed_stone', 'new_al_rod_pavement_thickness', 'truck_4t_loading_crushed_asphalt', 'caption_board_dekigata', 'caption_board_thermometer']

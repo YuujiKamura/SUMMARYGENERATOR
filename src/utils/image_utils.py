@@ -45,7 +45,7 @@ def find_warn_images(image_paths):
             qpixmap = QPixmap(img)
             if qpixmap.isNull() or qpixmap.width() == 0 or qpixmap.height() == 0:
                 warn.append(img)
-                print(f"警告画像検出(QPixmap): {img}")
+                # print(f"警告画像検出(QPixmap): {img}")  # 詳細ログ抑制
                 continue
                 
             # 2. Pillowで完全に読み込み可能か確認
@@ -53,7 +53,7 @@ def find_warn_images(image_paths):
                 im.load()  # 全データをロード
         except Exception as e:
             warn.append(img)
-            print(f"警告画像検出(例外): {img} ({e})")
+            # print(f"警告画像検出(例外): {img} ({e})")  # 詳細ログ抑制
             continue
             
     return warn
@@ -157,7 +157,7 @@ def scan_folder_for_valid_images(folder_path):
                     pixmap = QPixmap(str(file_path))
                     if pixmap.isNull() or pixmap.width() == 0 or pixmap.height() == 0:
                         corrupt_files.append(str(file_path))
-                        print(f"[除外] 破損画像(QPixmap): {file_path}")
+                        # print(f"[除外] 破損画像(QPixmap): {file_path}")  # 詳細ログ抑制
                         continue
                     # 念のためPILでも確認
                     with Image.open(str(file_path)) as im:
@@ -166,8 +166,8 @@ def scan_folder_for_valid_images(folder_path):
                     image_files.append(str(file_path))
                 except Exception as e:
                     corrupt_files.append(str(file_path))
-                    print(f"[除外] 破損画像(PIL): {file_path} ({e})")
-    if corrupt_files:
-        print(f"{len(corrupt_files)}件の破損画像をスキップしました")
-    print(f"[INFO] サムネイル化対象画像: {image_files}")
-    return image_files 
+                    # print(f"[除外] 破損画像(PIL): {file_path} ({e})")  # 詳細ログ抑制
+    # if corrupt_files:
+    #     print(f"{len(corrupt_files)}件の破損画像をスキップしました")  # 詳細ログ抑制
+    # print(f"[INFO] サムネイル化対象画像: {image_files}")  # 詳細ログ抑制
+    return image_files

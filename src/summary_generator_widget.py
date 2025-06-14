@@ -7,11 +7,11 @@ import logging
 log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs')
 os.makedirs(log_dir, exist_ok=True)
 log_path = os.path.join(log_dir, 'summary_generator_app.log')
-logging.basicConfig(
-    level=logging.WARNING,  # INFO→WARNINGに変更
-    format='[%(asctime)s][%(levelname)s] %(message)s',
-    handlers=[logging.FileHandler(log_path, encoding='utf-8'), logging.StreamHandler()]
-)
+# logging.basicConfig(
+#     level=logging.WARNING,  # INFO→WARNINGに変更
+#     format='[%(asctime)s][%(levelname)s] %(message)s',
+#     handlers=[logging.FileHandler(log_path, encoding='utf-8'), logging.StreamHandler()]
+# )
 logger = logging.getLogger(__name__)
 
 # 直接実行時にもsrc配下importが通るようにパスを調整

@@ -1,29 +1,24 @@
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QStyledItemDelegate, QListView, QAbstractItemView, QDialog, QTextEdit, QProgressBar, QCheckBox
-from PyQt6.QtGui import QIcon, QPainter, QPen, QColor
-from .scan_for_images_widget import ScanForImagesWidget
-from PyQt6.QtCore import Qt, QPoint, QSize, QAbstractListModel, QModelIndex, QRect, QVariant, QEvent
-from PyQt6.QtGui import QPixmap
+"""
+DetectResultWidget: 検出結果画像リストとプレビュー
+"""
 import os
 import json
-import threading
-import glob
-from PIL import Image
-from utils.model_manager import ModelManager
-from utils.image_utils import scan_folder_for_valid_images
 from pathlib import Path
-# from exporters.yolo_export import export_to_yolo
-from src.utils import io_utils
-import textwrap
-import shutil
-from .detect_result_utils import convert_role_json_to_annotation_dataset
-from .detect_result_dialogs import show_reassign_dialog, export_yolo_from_roles, validate_image_paths, show_bbox_completion_dialog
-from .detect_result_assign import assign_selected_images, _save_and_update, save_to_json, find_images_without_bboxes
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QMessageBox, QMenu
+from PyQt6.QtCore import Qt
+from src.widgets.scan_for_images_widget import ScanForImagesWidget
+from src.widgets.detect_result_utils import convert_role_json_to_annotation_dataset
+from src.widgets.detect_result_dialogs import show_reassign_dialog, export_yolo_from_roles, validate_image_paths, show_bbox_completion_dialog
+from src.widgets.detect_result_assign import assign_selected_images, _save_and_update, save_to_json, find_images_without_bboxes
 from src.utils.models import Annotation, ClassDefinition, AnnotationDataset, BoundingBox
 from src.widgets.image_preview_dialog import ImagePreviewDialog
+from src.utils.path_manager import path_manager
+from src.utils.chain_record_utils import ChainRecord
+from src.widgets.incorrect_marker_widget import IncorrectMarkerWidget
 
 class DetectResultWidget(QWidget):
-    def __init__(self, parent=None, test_mode=False, save_dir="seeds"):
-        super().__init__(parent)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.setWindowTitle("DetectResultWidget - detect_result_widget.py")
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("検出画像一覧"))
@@ -41,8 +36,8 @@ class DetectResultWidget(QWidget):
         layout.addWidget(self.result_text)
         self.setLayout(layout)
         self.assignment = {}
-        self.test_mode = test_mode
-        self.save_dir = save_dir
+        self.test_mode = False
+        self.save_dir = "seeds"
         logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../logs")
         logs_dir = os.path.abspath(logs_dir)
         os.makedirs(logs_dir, exist_ok=True)
@@ -50,9 +45,10 @@ class DetectResultWidget(QWidget):
         self.restore_window_settings()
         if not hasattr(self, '_restored_size') or not self._restored_size:
             self.resize(1200, 800)
-        # mainwin = self.window()
-        # if hasattr(mainwin, 'set_current_widget_name'):
-        #     mainwin.set_current_widget_name("detect_result_widget.py")
+        self.incorrect_entries = []
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
+        IncorrectMarkerWidget(self)  # 不正解マーカー機能
 
     # --- 画像リスト・検出結果表示以外のロジックを削除 ---
     def set_images(self, image_paths, bbox_dict=None):
@@ -88,7 +84,6 @@ class DetectResultWidget(QWidget):
     def restore_window_settings(self):
         try:
             if os.path.exists(self._settings_path):
-                import json
                 with open(self._settings_path, "r", encoding="utf-8") as f:
                     s = json.load(f)
                 if "size" in s:
@@ -105,19 +100,15 @@ class DetectResultWidget(QWidget):
             "pos": [self.x(), self.y()]
         }
         with open(self._settings_path, "w", encoding="utf-8") as f:
-            import json
             json.dump(s, f, ensure_ascii=False, indent=2)
 
     def save_image_list(self):
         # 画像リストの保存
         try:
-            from src.utils.path_manager import path_manager
             paths = self.image_widget.image_paths if hasattr(self.image_widget, 'image_paths') else self.image_paths
             image_list_json = str(path_manager.last_images)
-            from pathlib import Path
             Path(image_list_json).parent.mkdir(parents=True, exist_ok=True)
             with open(image_list_json, "w", encoding="utf-8") as f:
-                import json
                 json.dump(paths, f, ensure_ascii=False, indent=2)
             print(f"[画像リスト保存] {image_list_json} ({len(paths)}件)")
             path_manager.current_image_list_json = image_list_json
@@ -140,3 +131,27 @@ class DetectResultWidget(QWidget):
             return
         dlg = ImagePreviewDialog(img_path, self)
         dlg.exec()
+
+    def show_context_menu(self, pos):
+        menu = QMenu(self)
+        mark_action = menu.addAction("不正解としてマーク")
+        action = menu.exec(self.mapToGlobal(pos))
+        if action == mark_action:
+            current_image = self.image_widget.current_image
+            if current_image and current_image in self.bbox_dict:
+                record = ChainRecord(
+                    image_path=current_image,
+                    bbox=self.bbox_dict[current_image],
+                    remarks="incorrect_detection"
+                )
+                self.incorrect_entries.append(record)
+                self.save_incorrect_entries()
+
+    def save_incorrect_entries(self):
+        if not self.incorrect_entries:
+            return
+        output_path = os.path.join(path_manager.get_retrain_data_dir(), "incorrect_entries.json")
+        Path(os.path.dirname(output_path)).mkdir(parents=True, exist_ok=True)
+        data = [record.to_dict() for record in self.incorrect_entries]
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)

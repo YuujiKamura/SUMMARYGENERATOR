@@ -153,10 +153,10 @@ if __name__ == "__main__":
     import argparse
     
     # ロギングの設定
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    # logging.basicConfig(
+    #     level=logging.INFO,
+    #     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    # )
     
     # コマンドライン引数の解析
     parser = argparse.ArgumentParser(description='YOLOトレーニング＆予測マネージャーのアセットチェック')
@@ -171,4 +171,4 @@ if __name__ == "__main__":
     
     # 終了コードの設定
     exit_code = 0 if not (result["missing_dirs"] or result["missing_models"]) else 0
-    exit(exit_code) 
+    exit(exit_code)

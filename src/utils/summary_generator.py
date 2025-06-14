@@ -36,7 +36,7 @@ remarks_to_chain_record = {rec.remarks: rec for rec in chain_records if rec.rema
 # --- マッピングロジック ---
 log_dir = 'logs'
 os.makedirs(log_dir, exist_ok=True)
-logging.basicConfig(level=logging.DEBUG, filename=os.path.join(log_dir, "thermo_mapping_debug.log"), filemode="w", encoding="utf-8")
+# logging.basicConfig(level=logging.DEBUG, filename=os.path.join(log_dir, "thermo_mapping_debug.log"), filemode="w", encoding="utf-8")
 logger = logging.getLogger(__name__)
 
 def load_image_roles_from_cache_file(cache_dir="src/image_preview_cache"):
