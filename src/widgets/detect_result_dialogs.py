@@ -1,7 +1,7 @@
 import os
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QComboBox, QMessageBox, QFileDialog, QCheckBox, QProgressBar, QTextEdit, QDialogButtonBox, QGroupBox, QSpinBox
 from PyQt6.QtCore import Qt
-from utils.model_manager import ModelManager
+from src.utils.model_manager import ModelManager
 from PIL import Image
 import json
 from pathlib import Path

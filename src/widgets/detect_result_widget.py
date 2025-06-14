@@ -4,7 +4,7 @@ DetectResultWidget: 検出結果画像リストとプレビュー
 import os
 import json
 from pathlib import Path
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QMessageBox, QMenu
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QMessageBox
 from PyQt6.QtCore import Qt
 from src.widgets.scan_for_images_widget import ScanForImagesWidget
 from src.widgets.detect_result_utils import convert_role_json_to_annotation_dataset
@@ -13,8 +13,6 @@ from src.widgets.detect_result_assign import assign_selected_images, _save_and_u
 from src.utils.models import Annotation, ClassDefinition, AnnotationDataset, BoundingBox
 from src.widgets.image_preview_dialog import ImagePreviewDialog
 from src.utils.path_manager import path_manager
-from src.utils.chain_record_utils import ChainRecord
-from src.widgets.incorrect_marker_widget import IncorrectMarkerWidget
 
 class DetectResultWidget(QWidget):
     def __init__(self, *args, **kwargs):
@@ -45,10 +43,6 @@ class DetectResultWidget(QWidget):
         self.restore_window_settings()
         if not hasattr(self, '_restored_size') or not self._restored_size:
             self.resize(1200, 800)
-        self.incorrect_entries = []
-        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.customContextMenuRequested.connect(self.show_context_menu)
-        IncorrectMarkerWidget(self)  # 不正解マーカー機能
 
     # --- 画像リスト・検出結果表示以外のロジックを削除 ---
     def set_images(self, image_paths, bbox_dict=None):
@@ -131,27 +125,3 @@ class DetectResultWidget(QWidget):
             return
         dlg = ImagePreviewDialog(img_path, self)
         dlg.exec()
-
-    def show_context_menu(self, pos):
-        menu = QMenu(self)
-        mark_action = menu.addAction("不正解としてマーク")
-        action = menu.exec(self.mapToGlobal(pos))
-        if action == mark_action:
-            current_image = self.image_widget.current_image
-            if current_image and current_image in self.bbox_dict:
-                record = ChainRecord(
-                    image_path=current_image,
-                    bbox=self.bbox_dict[current_image],
-                    remarks="incorrect_detection"
-                )
-                self.incorrect_entries.append(record)
-                self.save_incorrect_entries()
-
-    def save_incorrect_entries(self):
-        if not self.incorrect_entries:
-            return
-        output_path = os.path.join(path_manager.get_retrain_data_dir(), "incorrect_entries.json")
-        Path(os.path.dirname(output_path)).mkdir(parents=True, exist_ok=True)
-        data = [record.to_dict() for record in self.incorrect_entries]
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)

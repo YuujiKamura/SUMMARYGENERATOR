@@ -5,6 +5,45 @@ from pathlib import Path
 DB_PATH = Path(__file__).parent / 'model_training_cache.db'
 JSON_PATH = Path(__file__).parent / 'image_preview_cache_master.json'
 
+# --- preset_roles.jsonのデフォルトパス ---
+_PRESET_ROLES_PATH = Path(__file__).parent / 'preset_roles.json'
+
+def _ensure_column_exists(cursor, table_name: str, column_name: str, column_def: str):
+    """指定テーブルに列が無ければ追加するユーティリティ"""
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    cols = [row[1] for row in cursor.fetchall()]
+    if column_name not in cols:
+        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
+
+def register_classes_from_preset(db_path=None, preset_path: Path | None = None):
+    """preset_roles.json から classes テーブルへ一括登録する"""
+    if db_path is None:
+        db_path = DB_PATH
+    if preset_path is None:
+        preset_path = _PRESET_ROLES_PATH
+    if not Path(preset_path).exists():
+        print(f"[WARN] preset_roles.json が見つかりません: {preset_path}")
+        return
+    # ロール一覧を読み込み
+    try:
+        with open(preset_path, encoding='utf-8') as f:
+            roles = json.load(f)
+    except Exception as e:
+        print(f"[WARN] preset_roles.json 読み込み失敗: {e}")
+        return
+    class_names = [entry.get('label') for entry in roles if entry.get('label')]
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    # classes テーブルが無い場合は作成
+    c.execute('CREATE TABLE IF NOT EXISTS classes (id INTEGER PRIMARY KEY, name TEXT UNIQUE)')
+    for idx, name in enumerate(class_names):
+        try:
+            c.execute('INSERT OR IGNORE INTO classes (id, name) VALUES (?, ?)', (idx, name))
+        except sqlite3.IntegrityError:
+            pass  # UNIQUE 制約で既に登録済みの場合
+    conn.commit()
+    conn.close()
+
 def create_table(db_path=None):
     if db_path is None:
         db_path = DB_PATH
@@ -32,15 +71,23 @@ def create_table(db_path=None):
             image_id INTEGER,
             cid INTEGER,
             cname TEXT,
+            class_master_id INTEGER,
             conf REAL,
             x1 REAL,
             y1 REAL,
             x2 REAL,
             y2 REAL,
             role TEXT,
-            FOREIGN KEY(image_id) REFERENCES images(id)
+            FOREIGN KEY(image_id) REFERENCES images(id),
+            FOREIGN KEY(class_master_id) REFERENCES classes(id)
         )
     ''')
+    c.execute('''CREATE TABLE IF NOT EXISTS classes (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE
+        )''')
+    # 既存 bboxes テーブルに列が無ければ追加
+    _ensure_column_exists(c, 'bboxes', 'class_master_id', 'INTEGER')
     conn.commit()
     conn.close()
 
@@ -52,6 +99,11 @@ def clear_tables(db_path=None):
     c.execute('DELETE FROM image_cache')
     c.execute('DELETE FROM bboxes')
     c.execute('DELETE FROM images')
+    # classes テーブルもクリアしておく
+    try:
+        c.execute('DELETE FROM classes')
+    except sqlite3.OperationalError:
+        pass  # classes テーブルがまだ無い場合
     conn.commit()
     conn.close()
 
@@ -68,6 +120,8 @@ def insert_image_cache_record(filename: str, image_path: str, bboxes, db_path=No
     conn.close()
 
 def insert_from_json():
+    # classes テーブルを初期登録
+    register_classes_from_preset()
     log_path = Path(__file__).parent.parent.parent / 'logs' / '00_db_register.log'
     with open(JSON_PATH, encoding='utf-8') as f:
         data = json.load(f)
@@ -109,8 +163,23 @@ def insert_from_json():
                 image_id = image_id_row[0] if image_id_row else None
                 # bboxesテーブルinsert
                 for bbox in bboxes:
-                    c.execute('''INSERT INTO bboxes (image_id, cid, cname, conf, x1, y1, x2, y2, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                              (image_id, bbox.get('cid'), bbox.get('cname'), bbox.get('conf'),
+                    # --- class_master_id を決定 ---
+                    class_name = bbox.get('role') or bbox.get('cname') or bbox.get('label')
+                    class_master_id = None
+                    if class_name:
+                        c.execute('SELECT id FROM classes WHERE name=?', (class_name,))
+                        row = c.fetchone()
+                        if row:
+                            class_master_id = row[0]
+                        else:
+                            # 未登録クラスは末尾に追加
+                            c.execute('SELECT MAX(id) FROM classes')
+                            max_id = c.fetchone()[0]
+                            new_id = (max_id + 1) if max_id is not None else 0
+                            c.execute('INSERT OR IGNORE INTO classes (id, name) VALUES (?, ?)', (new_id, class_name))
+                            class_master_id = new_id
+                    c.execute('''INSERT INTO bboxes (image_id, cid, cname, class_master_id, conf, x1, y1, x2, y2, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                              (image_id, bbox.get('cid'), bbox.get('cname'), class_master_id, bbox.get('conf'),
                                bbox.get('xyxy', [None]*4)[0], bbox.get('xyxy', [None]*4)[1],
                                bbox.get('xyxy', [None]*4)[2], bbox.get('xyxy', [None]*4)[3],
                                bbox.get('role')))
@@ -132,6 +201,8 @@ def insert_from_yolo_dir(yolo_dir, db_path=None):
     import os
     if db_path is None:
         db_path = DB_PATH
+    # classes テーブルを先に準備
+    register_classes_from_preset(db_path=db_path)
     yolo_dir = Path(yolo_dir)
     # train/val両対応: train優先、なければ直下
     images_dir = yolo_dir / 'images' / 'train'
@@ -193,8 +264,15 @@ def insert_from_yolo_dir(yolo_dir, db_path=None):
                 y1 = cy - bh / 2
                 x2 = cx + bw / 2
                 y2 = cy + bh / 2
-                c.execute('''INSERT INTO bboxes (image_id, cid, cname, conf, x1, y1, x2, y2, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                          (image_id, int(cid), '', 1.0, x1, y1, x2, y2, None))
+                class_master_id = int(cid)
+                # id からクラス名を取得（無ければ空文字）
+                c.execute('SELECT name FROM classes WHERE id=?', (class_master_id,))
+                row_name = c.fetchone()
+                class_name = row_name[0] if row_name else ''
+                role_val = class_name if class_name else None
+                cname_val = class_name
+                c.execute('''INSERT INTO bboxes (image_id, cid, cname, class_master_id, conf, x1, y1, x2, y2, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                          (image_id, int(cid), cname_val, class_master_id, 1.0, x1, y1, x2, y2, role_val))
             print(f"[OK] 登録: {img_file.name} (bbox数={len(valid_bbox_lines)})")
             total += 1
             success += 1
