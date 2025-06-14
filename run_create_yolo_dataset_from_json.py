@@ -109,10 +109,11 @@ class ModelTrainer:
                 self.log.info(f"モデル {model_path_obj} を使って学習を再開または継続します。")
         
         model_to_train = YOLO(str(current_model_path_to_use))
-
-        self.log.info(f"学習を開始します。進捗はターミナルに表示されます。結果は {project_dir_path / 'exp'} に保存されます。")
         
-        results = model_to_train.train(data=str(yaml_path), epochs=epochs, project=str(project_dir_path), name='exp', exist_ok=True)        # --- デバッグログ追加 ---
+        self.log.info(f"学習を開始します。進捗はターミナルに表示されます。結果は {project_dir_path / 'exp'} に保存されます。")
+        results = model_to_train.train(data=str(yaml_path), epochs=epochs, project=str(project_dir_path), name='exp', exist_ok=True)
+        
+        # --- デバッグログ追加 ---
         self.log.info(f"DEBUG: results object: {results}")
         self.log.info(f"DEBUG: type(results): {type(results)}")
         if hasattr(results, 'save_dir'):
@@ -125,7 +126,8 @@ class ModelTrainer:
             if results:
                 self.log.info(f"DEBUG: results attributes: {dir(results)}")
         # --- デバッグログ追加ここまで ---
-          self.log.info(f"学習が完了しました。 (ベースモデル: {model_name_for_log})")
+        
+        self.log.info(f"学習が完了しました。 (ベースモデル: {model_name_for_log})")
         
         # 新しいUltralyticsバージョンでは、保存先が project_dir/exp/weights/ になる
         # resultsオブジェクトのsave_dirプロパティが利用できない場合の対応
