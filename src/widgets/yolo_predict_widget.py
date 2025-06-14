@@ -1,16 +1,17 @@
 # YOLO推論ウィジェット（PhotoCategorizerからコピー）
 #!/usr/bin/env python3
+# flake8: noqa
 """
 YOLO推論ウィジェット
 """
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QFormLayout, QLineEdit, QPushButton, 
-    QHBoxLayout, QComboBox, QSpinBox, QFileDialog, QMessageBox
+    QHBoxLayout, QComboBox, QDoubleSpinBox, QFileDialog, QMessageBox
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QThread, pyqtSlot
 from .common import create_model_combo, create_progress_bar, create_log_text
-from src.utils.path_manager import path_manager
+from src.utils.path_manager import PathManager # PathManager クラスをインポート
 from .detect_result_widget import DetectResultWidget
 import os
 import csv
@@ -25,12 +26,43 @@ class YoloPredictThread(QThread):
         self.model_path = model_path
         self.image_dir = image_dir
         self.conf = conf
+
+    def _apply_dataset_names(self, model):
+        """model.model.names が全て 'unknown' の場合、直近の dataset.yaml から名前リストを適用する"""
+        try:
+            # 既存 names が unknown ばかりなら置き換え対象とみなす
+            current_names = getattr(model.model, "names", {})
+            if current_names and all("unknown" in str(n).lower() for n in current_names.values()):
+                from pathlib import Path
+                import yaml  # PyYAML
+
+                model_path = Path(self.model_path).resolve()
+                # 6階層以内で dataset.yaml を探す
+                dataset_yaml = None
+                for parent in list(model_path.parents)[:6]:
+                    cand = parent / "dataset.yaml"
+                    if cand.exists():
+                        dataset_yaml = cand
+                        break
+                if dataset_yaml:
+                    with open(dataset_yaml, "r", encoding="utf-8") as f:
+                        data = yaml.safe_load(f)
+                    names_list = data.get("names")
+                    if isinstance(names_list, list):
+                        names_dict = {i: n for i, n in enumerate(names_list)}
+                        model.model.names = names_dict
+                        self.output.emit(f"dataset.yaml からクラス名を適用: {dataset_yaml}")
+        except Exception as e:
+            self.output.emit(f"[names適用エラー] {e}")
+
     def run(self):
         try:
             from ultralytics import YOLO
             import os
             self.output.emit(f"モデル: {self.model_path}\n画像フォルダ: {self.image_dir}\n信頼度閾値: {self.conf}")
             model = YOLO(self.model_path)
+            # クラス名対応を補正
+            self._apply_dataset_names(model)
             results = model.predict(source=self.image_dir, conf=self.conf, save=False, show=False)
             # save=FalseなのでCSVやruns/detect/predictは生成されない
             # ここでresultsから直接検出結果をパースしてemit
@@ -38,6 +70,7 @@ class YoloPredictThread(QThread):
             for r in results:
                 img_path = r.path if hasattr(r, 'path') else None
                 names = r.names if hasattr(r, 'names') else {}
+                self.output.emit(f"[DEBUG] {img_path}: det={len(r.boxes)}")
                 dets = []
                 if hasattr(r, 'boxes') and r.boxes is not None:
                     for box in r.boxes:
@@ -66,6 +99,7 @@ class YoloPredictWidget(QWidget):
         """初期化"""
         super().__init__(parent)
         self.settings = settings_manager
+        self.path_manager = PathManager() # PathManagerのインスタンスを生成・保持
         self._setup_ui()
 
     def _setup_ui(self):
@@ -81,6 +115,7 @@ class YoloPredictWidget(QWidget):
         predict_form.setHorizontalSpacing(16)
         predict_form.setVerticalSpacing(8)
         self.model_combo = create_model_combo(self)
+        self.model_combo.currentTextChanged.connect(self._on_model_selection_changed)
         self.model_refresh_btn = QPushButton("更新")
         self.model_refresh_btn.setFixedWidth(60)
         self.model_refresh_btn.clicked.connect(self.refresh_models)
@@ -102,11 +137,13 @@ class YoloPredictWidget(QWidget):
         image_dir_layout.addWidget(self.image_dir_btn)
         image_dir_widget = QWidget()
         image_dir_widget.setLayout(image_dir_layout)
-        self.conf_spin = QSpinBox()
-        self.conf_spin.setRange(1, 100)
-        self.conf_spin.setValue(25)
-        self.conf_spin.setSuffix(" %")
-        self.conf_spin.setFixedWidth(80)
+        self.conf_spin = QDoubleSpinBox()
+        self.conf_spin.setRange(0.01, 1.0)
+        self.conf_spin.setSingleStep(0.01)
+        self.conf_spin.setDecimals(2)
+        self.conf_spin.setValue(0.10)
+        self.conf_spin.setSuffix("  (conf)")
+        self.conf_spin.setFixedWidth(100)
         predict_form.addRow("モデル:", model_widget)
         predict_form.addRow("画像フォルダ:", image_dir_widget)
         predict_form.addRow("信頼度閾値:", self.conf_spin)
@@ -126,13 +163,17 @@ class YoloPredictWidget(QWidget):
         layout.addStretch(1)
         self.refresh_models()
         self.restore_settings()
-
+    
     def save_settings(self):
         """現在のモデル・画像フォルダを保存"""
+        current_data = self.model_combo.currentData()
+        # 特別なエントリーは保存しない
+        model_path = current_data if current_data != "__BROWSE_FOLDER__" else ""
+        
         data = {
-            "model_path": self.model_combo.currentData(),
+            "model_path": model_path,
             "image_dir": self.image_dir_edit.text(),
-            "conf": self.conf_spin.value(),
+            "conf": float(self.conf_spin.value()),
         }
         try:
             with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
@@ -159,8 +200,8 @@ class YoloPredictWidget(QWidget):
                     self.image_dir_edit.setText(image_dir)
                 # 信頼度復元
                 conf = data.get("conf")
-                if conf:
-                    self.conf_spin.setValue(conf)
+                if conf is not None:
+                    self.conf_spin.setValue(float(conf))
         except Exception as e:
             print(f"[設定復元エラー] {e}")
 
@@ -182,26 +223,64 @@ class YoloPredictWidget(QWidget):
         for model_file in model_files:
             model_paths = [
                 Path.cwd() / model_file,
-                Path(os.path.dirname(__file__)).parent / "yolo" / model_file,
-                Path(os.path.dirname(__file__)).parent / "datasets" / model_file,
+                self.path_manager.src_dir / "yolo" / model_file, # path_manager を使用
+                self.path_manager.src_dir / "datasets" / model_file, # path_manager を使用
                 Path.home() / ".yolo" / "models" / model_file
             ]
             for model_path in model_paths:
                 if model_path.exists() and str(model_path) not in seen:
-                    self.model_combo.addItem(f"{model_file} (公式/共通)", str(model_path))
+                    self.model_combo.addItem(f"{model_file} (Official/Common)", str(model_path))
                     seen.add(str(model_path))
                     break
-        # src/yolo, src/datasets配下の.ptファイルを再帰的に探索
-        base_dirs = [Path(os.path.dirname(__file__)).parent / "yolo", Path(os.path.dirname(__file__)).parent / "datasets"]
+          # path_manager を使用して検索パスを構築
+        base_dirs = [
+            self.path_manager.project_root,  # summarygenerator フォルダ
+            self.path_manager.src_dir / "yolo",
+            self.path_manager.src_dir / "datasets",
+            self.path_manager.project_root / "logs"  # トレーニング結果のlogsディレクトリを追加
+        ]
+        # ホームディレクトリの .yolo/models も追加
+        home_yolo_dir = Path.home() / ".yolo" / "models"
+        if home_yolo_dir.exists() and home_yolo_dir not in base_dirs: # 重複を避ける
+            base_dirs.append(home_yolo_dir)
+
         for base in base_dirs:
             if base.exists():
                 for pt in base.rglob("*.pt"):
                     if str(pt) not in seen:
-                        label = f"{pt.relative_to(base)} (自作)"
+                        label = ""
+                        try:
+                            # project_root からの相対パスを試みる
+                            relative_path = pt.relative_to(self.path_manager.project_root)
+                            
+                            # トレーニング済みモデルの特別識別
+                            if "logs" in relative_path.parts and "weights" in relative_path.parts:
+                                # logs/training_run_*/exp/weights/best.pt のようなパス
+                                if pt.name == "best.pt":
+                                    label = f"🏆 {relative_path} (Best Trained)"
+                                elif pt.name == "last.pt":
+                                    label = f"📈 {relative_path} (Last Trained)"
+                                else:
+                                    label = f"🎯 {relative_path} (Trained)"
+                            else:
+                                label = f"{relative_path} (Project)"
+                        except ValueError:
+                            try:
+                                # src_dir からの相対パスを試みる
+                                relative_path = pt.relative_to(self.path_manager.src_dir)
+                                label = f"{relative_path} (Src)"
+                            except ValueError:
+                                # その他の場合はファイル名と親ディレクトリ名
+                                label = f"{pt.name} ({pt.parent.name})"
+                        
                         self.model_combo.addItem(label, str(pt))
                         seen.add(str(pt))
         if self.model_combo.count() == 0:
             self.model_combo.addItem("(モデルが見つかりません)", "")
+        
+        # 「フォルダから選ぶ」エントリーを追加
+        self.model_combo.addItem("📁 フォルダから選ぶ...", "__BROWSE_FOLDER__")
+        
         self.restore_settings()
 
     def select_image_dir(self):
@@ -216,10 +295,21 @@ class YoloPredictWidget(QWidget):
         if self.model_combo.count() == 0:
             QMessageBox.warning(self, "エラー", "モデルが見つかりません")
             return
+        
         model_data = self.model_combo.currentData()
+        
+        # 特別なエントリーの場合はエラー表示
+        if model_data == "__BROWSE_FOLDER__":
+            QMessageBox.warning(self, "エラー", "有効なモデルを選択してください")
+            return
+        
+        if not model_data or model_data == "":
+            QMessageBox.warning(self, "エラー", "有効なモデルを選択してください")
+            return
+            
         model_path = model_data
         image_dir = self.image_dir_edit.text()
-        conf = self.conf_spin.value() / 100.0
+        conf = float(self.conf_spin.value())
         if not image_dir:
             QMessageBox.warning(self, "エラー", "画像フォルダを選択してください")
             return
@@ -288,3 +378,38 @@ class YoloPredictWidget(QWidget):
         else:
             self.log_text.append(f"推論に失敗しました (コード: {return_code})\n{result}")
         self.save_settings()
+
+    def _on_model_selection_changed(self, text):
+        """モデル選択が変更された時の処理"""
+        current_data = self.model_combo.currentData()
+        if current_data == "__BROWSE_FOLDER__":
+            self._select_model_file()
+    
+    def _select_model_file(self):
+        """モデルファイル選択ダイアログを表示"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "YOLOモデルファイルを選択", 
+            "", 
+            "YOLO Models (*.pt);;All Files (*)"
+        )
+        if file_path:
+            # 新しいエントリーとして追加
+            from pathlib import Path
+            model_path = Path(file_path)
+            label = f"{model_path.name} (選択済み)"
+            
+            # 既に同じパスが存在するかチェック
+            for i in range(self.model_combo.count()):
+                if self.model_combo.itemData(i) == file_path:
+                    self.model_combo.setCurrentIndex(i)
+                    return
+            
+            # 「フォルダから選ぶ」エントリーの前に挿入
+            browse_index = self.model_combo.count() - 1  # 最後のエントリー
+            self.model_combo.insertItem(browse_index, label, file_path)
+            self.model_combo.setCurrentIndex(browse_index)
+        else:
+            # キャンセルされた場合は元の選択に戻す
+            if self.model_combo.count() > 1:
+                self.model_combo.setCurrentIndex(0)
