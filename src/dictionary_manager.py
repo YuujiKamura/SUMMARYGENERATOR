@@ -2,6 +2,7 @@
 ユーザー辞書管理クラス。
 工種、種別、細別などのキャプション辞書を管理します。
 """
+# flake8: noqa
 from __future__ import annotations
 import json
 import os
@@ -128,6 +129,46 @@ class DictionaryManager(QObject):
         # DBベースで初期化
         self.persistence.load_dictionaries()
         self.persistence.save_dictionaries()
+
+        # ---- CSV から最新レコード／ロールマッピングを読み込む ----
+        try:
+            from src.utils.csv_records_loader import load_records_and_roles_csv
+            csv_path = path_manager.records_and_roles_csv
+            if csv_path.exists():
+                csv_records, csv_mappings = load_records_and_roles_csv(csv_path)
+                if csv_mappings:
+                    # 新しいChainRecordをDBへ登録（roles情報含むextra_json）
+                    from src.db_manager import ChainRecordManager
+                    import json as _json
+                    for rec in csv_records:
+                        ChainRecordManager.add_chain_record(
+                            location=rec.location,
+                            controls=rec.controls,
+                            photo_category=rec.photo_category,
+                            work_category=rec.work_category,
+                            type_=rec.type,
+                            subtype=rec.subtype,
+                            remarks=rec.remarks,
+                            extra_json=_json.dumps(rec.extra, ensure_ascii=False),
+                        )
+
+                    for remarks, mp in csv_mappings.items():
+                        RoleMappingManager.add_or_update_role_mapping(
+                            remarks,
+                            _json.dumps(mp, ensure_ascii=False),
+                        )
+                    # 挿入後にDB内容でself.records / self.role_mappings を再取得
+                    self.records = [
+                        ChainRecord.from_dict(r)
+                        for r in ChainRecordManager.get_all_chain_records()
+                    ]
+                    self.role_mappings = {
+                        row['role_name']: json.loads(row['mapping_json'])
+                        for row in RoleMappingManager.get_all_role_mappings()
+                    }
+        except Exception as e:
+            logging.warning("CSVレコード／ロールマッピング読込に失敗: %s", e)
+
         self._log_dictionary_stats()
 
     # ----- レコード単位操作（新API） -----
@@ -287,15 +328,16 @@ class DictionaryManager(QObject):
         # for r in self.records:
         #     ChainRecordManager.delete_chain_record(r.remarks)
         for r in self.records:
+            import json as _json
             ChainRecordManager.add_chain_record(
-                location=getattr(r, 'location', None),
-                controls=getattr(r, 'controls', []),
-                photo_category=getattr(r, 'photo_category', None),
-                work_category=getattr(r, 'work_category', None),
-                type_=getattr(r, 'type', None),
-                subtype=getattr(r, 'subtype', None),
-                remarks=getattr(r, 'remarks', None),
-                extra_json=json.dumps(getattr(r, 'extra', None), ensure_ascii=False) if getattr(r, 'extra', None) else None
+                location=r.location,
+                controls=r.controls,
+                photo_category=r.photo_category,
+                work_category=r.work_category,
+                type_=r.type,
+                subtype=r.subtype,
+                remarks=r.remarks,
+                extra_json=_json.dumps(r.extra, ensure_ascii=False)
             )
         for role_name, mapping in self.role_mappings.items():
             RoleMappingManager.add_or_update_role_mapping(role_name, json.dumps(mapping, ensure_ascii=False))

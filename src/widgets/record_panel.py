@@ -42,15 +42,10 @@ class RecordPanel(QWidget):
         self.record_list_widget = RecordTableWidget()
         splitter.addWidget(self.record_list_widget)
         
-        # 下側：デバッグテキスト
-        self.debug_text = QTextEdit()
-        self.debug_text.setReadOnly(True)
-        splitter.addWidget(self.debug_text)
-        
-        # スプリッターの配分を設定（上：下 = 2：1）
-        splitter.setSizes([400, 200])
-        splitter.setCollapsible(0, False)  # 記録テーブルが完全に閉じられないようにする
-        splitter.setCollapsible(1, False)  # デバッグパネルが完全に閉じられないようにする
+        # デバッグテキストパネルは不要になったため削除
+        # splitter には RecordTableWidget のみ配置
+        splitter.setSizes([600])
+        splitter.setCollapsible(0, False)
         
         # レイアウトにスプリッターを追加
         layout.addWidget(splitter, 1)
@@ -58,8 +53,9 @@ class RecordPanel(QWidget):
     def set_location(self, text):
         self.location_label.setText(text)
 
+    # デバッグテキスト機能は削除
     def set_debug_text(self, text):
-        self.debug_text.setPlainText(text)
+        pass
 
     def update_records(self, matched_records, remarks_to_record=None):
         # 全件表示に修正

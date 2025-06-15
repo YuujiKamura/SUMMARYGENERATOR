@@ -68,29 +68,50 @@ def match_normal_roles_records(record, mapping, records):
     return matched
 
 def match_roles_records_one_stop(img_json, role_mapping, records, image_path=None, json_path=None):
+    """画像 JSON + records を受け取り、summarygenerator/data/matcher ベースでマッチングした
+    ChainRecord リストを保持する ImageEntry を返す。
+
+    旧実装のロジック（role_mapping 経由）を置き換え。
+    - soil_thickness 特別判定は従来通り維持
+    - best-match（found 数最大）レコード 1 件のみ採用（要求に応じて拡張可）
     """
-    img_json, role_mapping, recordsを受け取り、ImageEntryを返すワンストップAPI
-    """
+
+    try:
+        # パッケージとしてインストールされている場合
+        from summarygenerator.data import matcher as _m  # type: ignore
+    except ModuleNotFoundError:
+        # スクリプトが summarygenerator ディレクトリ直下から実行されている場合
+        from data import matcher as _m  # type: ignore
+
+    # --- roles 抽出（img_roles + bbox_roles） ---
     img_roles = set(img_json.get('roles', []) or [])
     bboxes = img_json.get('bboxes', []) or []
     bbox_roles = set([b.get('role') for b in bboxes if b.get('role')])
     all_roles = img_roles | bbox_roles
-    # soil_thickness特別判定
+
+    # soil_thickness 特別判定（旧処理を踏襲）
     if any('soil_thickness' in r for r in all_roles):
-        saishaku_records = [r for r in records if (getattr(r, 'remarks', None) == '礫石厚測定') or (isinstance(r, dict) and r.get('remarks') == '礫石厚測定')]
+        saishaku_records = [
+            r for r in records
+            if (getattr(r, 'remarks', None) == '礫石厚測定') or
+               (isinstance(r, dict) and r.get('remarks') == '礫石厚測定')
+        ]
         entry = ImageEntry(
             image_path=image_path or img_json.get('image_path', ''),
             json_path=json_path or img_json.get('json_path', ''),
             chain_records=saishaku_records,
             location=img_json.get('location', None),
-            debug_text=img_json.get('debug_text', None)
+            debug_text=img_json.get('debug_text', None),
+            roles=list(all_roles)
         )
         entry.debug_log.append('[match_roles_records_one_stop] soil_thickness特別処理: 礫石厚測定レコードのみ返却')
         return entry
-    # 通常マッチング
-    matched_records = match_normal_roles_records(img_json, role_mapping, records)
-    if matched_records is None:
-        matched_records = []
+
+    # --- 新マッチング ---
+    candidates = _m.collect_match_candidates(records, all_roles)
+    best = _m.select_best_match(candidates)
+    matched_records = [best[0]] if best else []
+
     entry = ImageEntry(
         image_path=image_path or img_json.get('image_path', ''),
         json_path=json_path or img_json.get('json_path', ''),
@@ -99,5 +120,15 @@ def match_roles_records_one_stop(img_json, role_mapping, records, image_path=Non
         debug_text=img_json.get('debug_text', None),
         roles=list(all_roles)
     )
-    entry.debug_log.append("[match_roles_records_one_stop] roles={} → matched_remarks={}".format(list(all_roles), [getattr(r, 'remarks', None) for r in matched_records]))
+
+    # デバッグログ
+    if best:
+        rec, found, match_val = best
+        entry.debug_log.append(
+            f"[new_matcher] roles={list(all_roles)} → best_match remarks={getattr(rec, 'remarks', getattr(rec, 'key', [''])[4] if isinstance(rec, dict) and 'key' in rec else None)} "
+            f"found={found} match_val={match_val}"
+        )
+    else:
+        entry.debug_log.append(f"[new_matcher] roles={list(all_roles)} → マッチなし")
+
     return entry

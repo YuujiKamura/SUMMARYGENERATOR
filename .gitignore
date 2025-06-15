@@ -20,6 +20,11 @@ logs/
 *.bak
 # DB・バイナリ
 src/yolo_data.db
+# YOLO学習済み重みファイル
+*.pt
+*.onnx
+*.engine
+src/yolo/weights/
 # 画像キャッシュ・中間生成物
 src/image_preview_cache/
 src/image_preview_cache_master.json

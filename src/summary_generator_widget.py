@@ -40,6 +40,7 @@ from src.utils.chain_record_utils import find_chain_records_by_roles
 from src.utils.image_selection_debug import generate_image_selection_debug
 from src.utils.role_mapping_utils import load_role_mapping
 from src.utils.record_matching_utils import match_roles_records_one_stop
+from src.new_matcher import match_images_with_records
 from dataclasses import dataclass, field
 from typing import List, Optional
 from src.utils.image_entry import ImageEntry
@@ -72,33 +73,30 @@ class SummaryGeneratorWidget(QMainWindow):
     def __init__(self, parent=None, test_mode=False):
         super().__init__(parent)
         logger.info('SummaryGeneratorWidget: 初期化開始')
-        # --- サービスクラスでDB・リソース初期化（必ず一度だけ呼ぶ）---
+        # --- サービスクラスでDB・リソース初期化（1回だけ）---
         self.data_service = SummaryDataService(db_path=DB_PATH)
         logger.info('SummaryDataServiceインスタンス生成: db_path=%s', DB_PATH)
+
         # 必要なマネージャやデータはサービスから取得
         self.dictionary_manager = self.data_service.dictionary_manager or DictionaryManager(DB_PATH)
         logger.info('DictionaryManagerインスタンス生成')
-        db_role_mappings = self.data_service.role_mappings
-        logger.debug('DBからrole_mappings取得: 件数=%d', len(db_role_mappings) if db_role_mappings else 0)
-        # db_role_mappingsの中身がdictでなければjson.loadsで辞書化
-        role_mappings_dicts = []
-        for row in db_role_mappings:
-            if isinstance(row, str):
-                try:
-                    row = json.loads(row)
-                except Exception as e:
-                    logger.warning('role_mappingsのjson.loads失敗: %s', e)
-                    continue
-            role_mappings_dicts.append(row)
-        self.role_mapping = {row['role_name']: json.loads(row['mapping_json']) if row['mapping_json'] else {} for row in role_mappings_dicts}
-        logger.info('role_mappingロード: keys=%s', list(self.role_mapping.keys()) if self.role_mapping else 'EMPTY')
-        self.data_service = SummaryDataService(self.dictionary_manager, CACHE_DIR, RECORDS_PATH, role_mapping=self.role_mapping)
-        logger.info('SummaryDataService再生成（role_mapping反映）')
+
+        # role_mapping も初回 SummaryDataService が読み込んだものを使用
+        self.role_mapping = self.data_service.role_mappings or {}
+        logger.info('role_mappingロード(DB/CSV): keys=%s', list(self.role_mapping.keys()) if self.role_mapping else 'EMPTY')
+
+        # 追加生成していた data_service を廃止し、既存インスタンスに最新 role_mapping を設定
+        self.data_service.role_mappings = self.role_mapping
+        # full_initialize は SummaryDataService.__init__ 内で完了済みのため呼び直さない
+        logger.info('SummaryDataServiceにrole_mappingを適用')
+
         # 画像リストもDBから取得
         self.image_data_manager = ImageDataManager.from_db()
         logger.info('ImageDataManager.from_db()呼び出し')
         self.vm = SummaryGeneratorViewModel(self.data_service)
         self.test_mode = test_mode
+        self._first_show = True
+        self._matching_done = False  # 一括マッチング実行済みフラグ
         self.setup_ui()
         self.vm.image_list_changed.connect(self.image_list_panel.update_image_list)
         self.vm.remarks_changed.connect(lambda remarks: self.record_panel.update_records(remarks, None))
@@ -106,7 +104,6 @@ class SummaryGeneratorWidget(QMainWindow):
         # ここを修正: image_selected, image_double_clicked をWidget本体のハンドラに接続
         self.image_list_panel.image_selected.connect(self.on_image_selected)
         self.image_list_panel.image_double_clicked.connect(self.on_image_double_clicked)
-        self._first_show = True
         logger.info('SummaryGeneratorWidget: 初期化完了')
 
     def showEvent(self, event):
@@ -128,6 +125,7 @@ class SummaryGeneratorWidget(QMainWindow):
         self.status_bar = self.ui.status_bar
         self.json_path_edit = self.ui.json_path_edit
         self.folder_path_edit = self.ui.folder_path_edit
+        self.resize(1000, 800)          # 幅 × 高さ
         # ファイル・編集・ヘルプメニューはUIクラスで一元管理
         # self.menubar.addMenu(edit_menu) などの重複追加は行わない
         # 追加のアクションやメニュー生成はここで行わない
@@ -206,11 +204,21 @@ class SummaryGeneratorWidget(QMainWindow):
             for e in filtered_entries:
                 # logging.info(f"  id={id(e)} image_path={getattr(e, 'image_path', None)}")
                 pass
-            all_debugs = []
-            for entry in self.entries:
-                all_debugs.append(f"{getattr(entry, 'image_path', None)}:\n" + "\n".join(entry.debug_log or ["(empty)"]))
-            if hasattr(self, 'record_panel'):
-                self.record_panel.set_debug_text("\n\n".join(all_debugs))
+
+            # chain_records が未設定のエントリに対してのみマッチングを実行
+            entries_need_match = [e for e in entries if (not getattr(e, 'chain_records', None)) and (not self._matching_done)]
+            if entries_need_match:
+                try:
+                    self.data_service.get_match_results(
+                        entries_need_match,
+                        self.role_mapping,
+                        self.data_service.remarks_to_chain_record
+                    )
+                except Exception as e:
+                    logging.warning("[update_image_list] get_match_results 失敗: %s", e)
+                else:
+                    self._matching_done = True
+
         logging.info('[LOG] update_image_list: 終了')
 
     def get_remarks_and_debug(self, entry):
@@ -245,22 +253,12 @@ class SummaryGeneratorWidget(QMainWindow):
             self.vm.remarks_changed.emit([])
             if hasattr(self, 'record_panel'):
                 self.record_panel.set_location("測点: 未設定")
-                self.record_panel.set_debug_text("")
             return
         matched_records = entry.chain_records if hasattr(entry, 'chain_records') else []
         self.vm.remarks_changed.emit(matched_records)
         if hasattr(self, 'record_panel'):
             location = f"測点: {entry.location}" if hasattr(entry, 'location') and entry.location else "測点: 未設定"
-            debug_texts = []
-            if hasattr(entry, 'debug_text') and entry.debug_text:
-                debug_texts.append(str(entry.debug_text))
-            logging.info(f"[DEBUG][on_image_selected] entry.id = {id(entry)} entry.debug_log = {getattr(entry, 'debug_log', None)}")
-            if hasattr(entry, 'debug_log') and entry.debug_log:
-                debug_texts.append("\n".join([str(x) for x in entry.debug_log]))
-            debug_text = "\n".join(debug_texts) if debug_texts else "デバッグ情報なし"
-            logging.info(f"[DEBUG][on_image_selected] set_debug_textに渡す内容 = {debug_text}")
             self.record_panel.set_location(location)
-            self.record_panel.set_debug_text(debug_text)
         logging.info(f"[LOG] record_panelへ反映: matched_records = [")
         for rec in matched_records:
             logging.info(f"  ChainRecord(remarks={getattr(rec, 'remarks', None)}, photo_category={getattr(rec, 'photo_category', None)}, work_category={getattr(rec, 'work_category', None)}, type={getattr(rec, 'type', None)}, subtype={getattr(rec, 'subtype', None)})")

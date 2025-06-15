@@ -301,5 +301,10 @@ class PathManager:
         """YOLO用DBファイル（yolo_data.db）の絶対パスを返す"""
         return self.project_root / "yolo_data.db"
 
+    @property
+    def records_and_roles_csv(self) -> Path:
+        """最新のChainRecord＋ロールマッピングCSV"""
+        return self.project_root / "data" / "records_and_roles.csv"
+
 # グローバルインスタンス
 path_manager = PathManager()

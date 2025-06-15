@@ -16,7 +16,7 @@ truck_4t_loading_crushed_asphalt",role_driver_backhoe_pavement_load,,,,
 施工状況写真,舗装補修工,アスファルト舗装補修工,表層工,プライムコート養生砂散布状況,1,,role_worker_sand_curing,,,,surface_covered_sand
 施工状況写真,舗装補修工,アスファルト舗装補修工,表層工,プライムコート養生砂清掃状況,1,,role_worker_sand_cleaning,,,,surface_covered_sand
 施工状況写真,舗装補修工,アスファルト舗装補修工,表層工,端部乳剤塗布状況,1,,role_worker_emulsion_edge,,,,
-施工状況写真,舗装補修工,アスファルト舗装補修工,表層工,舗設状況,2,,role_worker_surface_level,,,,surface_pavement
+施工状況写真,舗装補修工,アスファルト舗装補修工,表層工,舗設状況,1,,role_worker_surface_level,,,,surface_pavement
 施工状況写真,舗装補修工,アスファルト舗装補修工,表層工,初期転圧状況,2,roller_conbined_2.5t,role_driver_combined_roller,,,,surface_pavement
 施工状況写真,舗装補修工,アスファルト舗装補修工,表層工,2次転圧状況,2,roller_tyres_3t,role_driver_tire_roller_3t,,,,surface_pavement
 品質管理写真,舗装補修工,アスファルト舗装補修工,表層工,As混合物 到着温度測定,1,,,caption_board_thermometer,role_measurer_thermometer,thermometer,

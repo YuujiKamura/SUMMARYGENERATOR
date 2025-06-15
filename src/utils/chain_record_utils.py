@@ -37,8 +37,23 @@ class ChainRecord:
         # 主要フィールド以外はextraに格納
         known = {k: d.get(k) for k in ['location', 'photo_category', 'work_category', 'type', 'subtype', 'remarks']}
         known['controls'] = controls
+        import json as _json
         extra = {k: v for k, v in d.items() if k not in known and k not in ['control', 'controls', '管理値']}
-        return ChainRecord(**known, extra=extra)
+        # extra_json フィールドがあればマージ
+        if 'extra_json' in d and d['extra_json']:
+            try:
+                decoded = _json.loads(d['extra_json']) if isinstance(d['extra_json'], str) else d['extra_json']
+                if isinstance(decoded, dict):
+                    extra.update(decoded)
+            except Exception:
+                pass
+        # extra_jsonキー自体は不要
+        extra.pop('extra_json', None)
+
+        rec = ChainRecord(**known, extra=extra)
+        if isinstance(extra, dict) and 'roles' in extra and extra['roles']:
+            setattr(rec, 'roles', extra['roles'])
+        return rec
 
     def to_dict(self) -> dict:
         d = {

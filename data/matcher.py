@@ -1,5 +1,9 @@
 from typing import Any, Iterable, Optional, List, Tuple, Dict
-from records import Record
+
+try:
+    from .records import Record
+except ImportError:
+    from records import Record
 
 def get_match_val(record: Any) -> str:
     if isinstance(record, dict):
@@ -9,13 +13,71 @@ def get_match_val(record: Any) -> str:
     return 'any'
 
 def get_criteria(record: Any) -> List[str]:
+    """
+    criteria フィールドが無い場合でも安全に動作するように改良。
+    優先順位は以下の通り。
+
+    1. record['criteria'] または record.criteria が存在すればそれを使用
+    2. record['roles'] / record.roles が存在すればそれを使用
+    3. ChainRecord 互換オブジェクトの場合は work_category / type / subtype / extra の文字列を候補に使用
+
+    どのケースでも、返り値は小文字化された文字列リストとなる。
+    """
+
+    # --- dict 型 ---
     if isinstance(record, dict):
-        criteria = record['criteria']
+        if 'criteria' in record and record['criteria']:
+            criteria = record['criteria']
+        elif 'roles' in record and record['roles']:
+            criteria = record['roles']
+        else:
+            # work_category/type/subtype などを補助的に利用
+            candidates = []
+            for key in ('work_category', 'type', 'subtype'):
+                if key in record and record[key]:
+                    candidates.append(str(record[key]))
+            # extra(dict) 内の文字列値も追加
+            extra = record.get('extra') or {}
+            if isinstance(extra, dict):
+                for v in extra.values():
+                    if isinstance(v, str):
+                        candidates.append(v)
+                    elif isinstance(v, list):
+                        candidates.extend([str(x) for x in v])
+            criteria = candidates
     else:
-        criteria = getattr(record, 'criteria', [])
+        # --- オブジェクト型 ---
+        if hasattr(record, 'criteria') and getattr(record, 'criteria'):
+            criteria = getattr(record, 'criteria')
+        elif hasattr(record, 'roles') and getattr(record, 'roles'):
+            criteria = getattr(record, 'roles')
+        else:
+            # ChainRecord を想定
+            candidates = []
+            for attr in ('work_category', 'type', 'subtype'):
+                if hasattr(record, attr):
+                    val = getattr(record, attr)
+                    if val:
+                        candidates.append(str(val))
+            # extra(dict) の文字列値
+            if hasattr(record, 'extra'):
+                extra = getattr(record, 'extra') or {}
+                if isinstance(extra, dict):
+                    for v in extra.values():
+                        if isinstance(v, str):
+                            candidates.append(v)
+                        elif isinstance(v, list):
+                            candidates.extend([str(x) for x in v])
+            criteria = candidates
+
+    # いずれの方法でも criteria が文字列 or リストになるよう保証
     if isinstance(criteria, str):
         return [criteria.strip().lower()]
-    return [c.strip().lower() for c in criteria]
+    elif isinstance(criteria, (list, tuple, set)):
+        return [str(c).strip().lower() for c in criteria if c]
+    else:
+        # 不明な型は空リスト
+        return []
 
 def match_record_to_roles(record: Any, roles: Iterable[str]) -> Tuple[bool, List[str]]:
     criteria = get_criteria(record)

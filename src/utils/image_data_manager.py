@@ -32,7 +32,7 @@ class ImageDataManager:
             images = ImageManager.get_all_images()
             role_mapping = load_role_mapping()
             dictionary_manager = DictionaryManager(None)
-            records = dictionary_manager.records
+            records_master = dictionary_manager.records
             for img in images:
                 image_id = img["id"]
                 img_path = img["image_path"]
@@ -41,7 +41,24 @@ class ImageDataManager:
                     "image_path": img_path,
                     "bboxes": bboxes
                 }
-                entry = ImageEntry.from_cache_json(img_path, cache_json, role_mapping, records)
+                # roles 抽出（bboxes から）
+                roles: list[str] = []
+                for b in bboxes:
+                    role = b.get("role")
+                    if role:
+                        roles.append(role)
+                # chain_records は DB に登録済みのもののみ取得、ここでは新規マッチングしない
+                chain_record_dicts = ChainRecordManager.get_chain_records_for_image(image_id)
+                chain_records = [ChainRecord.from_dict(r) for r in chain_record_dicts]
+                entry = ImageEntry(
+                    image_path=img_path,
+                    json_path=None,
+                    chain_records=chain_records,
+                    location=None,
+                    debug_text=None,
+                    cache_json=cache_json,
+                    roles=roles
+                )
                 entries.append(entry)
             self.entries = entries
             log('A_IMAGE_LOAD', {'count': len(images), 'image_paths': [img["image_path"] for img in images[:10]]})
@@ -56,6 +73,8 @@ class ImageDataManager:
         entries = []
         images = ImageManager.get_all_images()
         role_mapping = load_role_mapping()
+        dictionary_manager = DictionaryManager(None)
+        records_master = dictionary_manager.records
         for img in images:
             image_id = img["id"]
             img_path = img["image_path"]
@@ -67,6 +86,13 @@ class ImageDataManager:
                 "image_path": img_path,
                 "bboxes": bboxes
             }
+            # roles 抽出（bboxes から）
+            roles: list[str] = []
+            for b in bboxes:
+                role = b.get("role")
+                if role:
+                    roles.append(role)
+            # chain_records は DB 登録済みのみ。ここでは新規マッチングしない
             entry = ImageEntry(
                 image_path=img_path,
                 json_path=None,
@@ -74,7 +100,7 @@ class ImageDataManager:
                 location=None,
                 debug_text=None,
                 cache_json=cache_json,
-                roles=None
+                roles=roles
             )
             entries.append(entry)
         inst = cls.__new__(cls)

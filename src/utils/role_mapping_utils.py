@@ -30,14 +30,36 @@ class RoleMappingManager(QObject):
         with open(self._path, encoding="utf-8") as f:
             return json.load(f)
 
-def load_role_mapping(path=ROLE_MAPPING_PATH):
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-    # 旧形式対応
-    for k, v in list(data.items()):
-        if isinstance(v, list):
-            data[k] = {"roles": v, "match": "all"}
-    return data
+def load_role_mapping(path: str | None = None):
+    """ロールマッピングをロードするユーティリティ。
+
+    1. DB（DictionaryManager）の role_mappings が存在すればそれを返す。
+    2. それ以外は従来の JSON ファイル（`data/role_mapping.json`）を読み込む。
+    """
+    # --- DB / DictionaryManager 優先 ---
+    try:
+        from src.dictionary_manager import DictionaryManager  # 遅延インポート
+        dm = DictionaryManager(None)
+        if getattr(dm, "role_mappings", None):
+            return dm.role_mappings
+    except Exception:
+        # DictionaryManager が利用不可の場合は無視してファイル読込へフォールバック
+        pass
+
+    # --- ファイルベースのフォールバック ---
+    if path is None:
+        path = ROLE_MAPPING_PATH
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        # 旧形式対応
+        for k, v in list(data.items()):
+            if isinstance(v, list):
+                data[k] = {"roles": v, "match": "all"}
+        return data
+    except Exception:
+        # 読み込み失敗時は空 dict
+        return {}
 
 def load_image_roles_from_cache(cache_dir):
     """

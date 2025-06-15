@@ -62,3 +62,42 @@ def match_images_with_records(images: List[Dict[str, Any]],
                     matched.append(remarks)
         result[img.get('image_path', '')] = matched
     return result
+
+
+# -----------------------------------------------------------------------------
+# Adapter: remarks → ChainRecord objects
+# -----------------------------------------------------------------------------
+
+def match_images_with_chain_records(
+    images: List[Dict[str, Any]],
+    role_mapping: Dict[str, Dict[str, Any]],
+    records: List[Any],
+) -> Dict[str, List[Any]]:
+    """match_images_with_records の結果を ChainRecord オブジェクトに置き換えて返す
+
+    Args:
+        images: image dict list (same as match_images_with_records)
+        role_mapping: remarks ➜ {roles, match}
+        records: ChainRecord または dict のリスト
+
+    Returns:
+        {image_path: [ChainRecord, ...]}
+    """
+    # まず remarks list を取得
+    img_to_remarks = match_images_with_records(images, role_mapping, [r.to_dict() if hasattr(r, 'to_dict') else r for r in records])
+
+    # remarks → record lookup
+    lookup = {}
+    for r in records:
+        rem = None
+        if isinstance(r, dict):
+            rem = r.get('remarks')
+        else:
+            rem = getattr(r, 'remarks', None)
+        if rem is not None:
+            lookup[rem] = r
+
+    img_to_records: Dict[str, List[Any]] = {}
+    for img_path, remarks_list in img_to_remarks.items():
+        img_to_records[img_path] = [lookup[rem] for rem in remarks_list if rem in lookup]
+    return img_to_records

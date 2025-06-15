@@ -1,4 +1,5 @@
 from PyQt6.QtWidgets import QTableWidget, QTableWidgetItem
+from src.utils.chain_record_utils import ChainRecord  # 遅延インポートで循環回避
 
 class RecordTableWidget(QTableWidget):
     def __init__(self, parent=None):
@@ -11,36 +12,22 @@ class RecordTableWidget(QTableWidget):
         self.setColumnWidth(4, 300)
 
     def update_records(self, records_list):
+        """ChainRecord のみを表示対象とするシンプル実装"""
         self.setRowCount(0)
+
         for record in records_list:
-            # recordがChainRecordなら属性参照、dictならdict参照
-            if hasattr(record, 'remarks') and hasattr(record, 'photo_category'):
-                rec = record
-            elif isinstance(record, dict):
-                rec = record
-            else:
-                rec = None
+            if not isinstance(record, ChainRecord):
+                # 想定外の型はスキップ
+                continue
+
             row = self.rowCount()
             self.insertRow(row)
-            if rec is not None:
-                # ChainRecord型なら属性参照、dict型ならdict参照
-                def get_val(obj, attr, default=''):
-                    if hasattr(obj, attr):
-                        return getattr(obj, attr)
-                    elif isinstance(obj, dict):
-                        return obj.get(attr, default)
-                    return default
-                self.setItem(row, 0, QTableWidgetItem(get_val(rec, 'photo_category')))
-                self.setItem(row, 1, QTableWidgetItem(get_val(rec, 'work_category', get_val(rec, 'category'))))
-                self.setItem(row, 2, QTableWidgetItem(get_val(rec, 'type')))
-                self.setItem(row, 3, QTableWidgetItem(get_val(rec, 'subtype')))
-                self.setItem(row, 4, QTableWidgetItem(get_val(rec, 'remarks', str(record))))
-            else:
-                # recがNone（不明な型）は空欄
-                self.setItem(row, 0, QTableWidgetItem(''))
-                self.setItem(row, 1, QTableWidgetItem(''))
-                self.setItem(row, 2, QTableWidgetItem(''))
-                self.setItem(row, 3, QTableWidgetItem(''))
-                self.setItem(row, 4, QTableWidgetItem(str(record)))
+
+            self.setItem(row, 0, QTableWidgetItem(record.photo_category or ""))
+            self.setItem(row, 1, QTableWidgetItem(record.work_category or ""))
+            self.setItem(row, 2, QTableWidgetItem(record.type or ""))
+            self.setItem(row, 3, QTableWidgetItem(record.subtype or ""))
+            self.setItem(row, 4, QTableWidgetItem(record.remarks or ""))
+
         self.resizeColumnsToContents()
         self.setColumnWidth(4, 300)
