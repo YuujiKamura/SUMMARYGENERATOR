@@ -3,6 +3,7 @@ from src.widgets.image_preview_utils import save_image_cache_with_location
 from src.utils.image_cache_utils import get_image_cache_path
 import json
 import os
+from src import db_manager
 
 class CacheService:
     def __init__(self, base_dir: Path | str | None = None):
@@ -43,6 +44,11 @@ class CacheService:
             data["location"] = location
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            # DB 更新
+            try:
+                db_manager.ImageManager.add_image(Path(img_path).name, str(img_path), location=location)
+            except Exception:
+                pass
             return True
         except OSError:
             return False

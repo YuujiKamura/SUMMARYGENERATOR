@@ -41,6 +41,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--conf", type=float, default=0.10, help="信頼度閾値")
     p.add_argument("--out", type=str, default="prediction_match_results.xlsx", help="出力 Excel ファイル")
     p.add_argument("--json-out", type=str, default="prediction_match_results.json", help="中間 JSON 出力")
+    p.add_argument("--non-recursive", action="store_false", dest="recursive", help="サブフォルダを探索しない")
+    p.add_argument("--location", type=str, default=None, help="画像に一括で付与する測点(Location)")
     return p.parse_args()
 
 # --- メイン -------------------------------------------------------------------
@@ -62,8 +64,10 @@ def main() -> None:
     svc.process(
         image_dir=image_dir,
         conf=args.conf,
+        recursive=args.recursive,
         out_excel=out_excel,
         out_json=out_json,
+        location=args.location,
     )
 
     LOGGER.info("処理完了")

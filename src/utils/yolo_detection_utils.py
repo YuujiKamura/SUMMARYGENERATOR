@@ -42,14 +42,56 @@ def detect_dir(
     model_path: str,
     *,
     conf: float = 0.10,
+    recursive: bool = True,
 ) -> Dict[str, List[tuple]]:
-    """image_dir 配下画像を detect_boxes_with_yolo で推論し dict を返す"""
-    image_dir = Path(image_dir)
-    image_files = sorted(
-        str(p)
-        for p in image_dir.rglob('*')
-        if p.suffix.lower() in {'.jpg', '.jpeg', '.png', '.bmp', '.gif'}
-    )
-    if not image_files:
+    """ディレクトリ内画像を検出して dict を返す
+
+    Args:
+        image_dir: フォルダ
+        model_path: .pt
+        conf: 信頼度
+        recursive: サブフォルダも含めるか
+    """
+    files = list_image_files(image_dir, recursive=recursive)
+    if not files:
         raise FileNotFoundError(f"画像が見つかりません: {image_dir}")
-    return detect_boxes_with_yolo(image_files, model_path, confidence=conf) 
+    return detect_boxes_with_yolo(files, model_path, confidence=conf)
+
+
+# -----------------------------------------------------------------------------
+# Helper: collect image files (recursive)
+# -----------------------------------------------------------------------------
+
+def list_image_files(image_dir: Path | str, *, recursive: bool = True) -> List[str]:
+    """指定ディレクトリ以下の画像ファイルパス一覧を返す
+
+    Args:
+        image_dir: 画像ディレクトリ
+        recursive: True ならサブフォルダも探索
+    """
+    image_dir = Path(image_dir)
+    if recursive:
+        paths = image_dir.rglob('*')
+    else:
+        paths = image_dir.glob('*')
+    return [
+        str(p) for p in paths
+        if p.suffix.lower() in {'.jpg', '.jpeg', '.png', '.bmp', '.gif'}
+    ]
+
+
+# -----------------------------------------------------------------------------
+# Adapter: recursive detect using list_image_files
+# -----------------------------------------------------------------------------
+
+def detect_dir_recursive(
+    image_dir: Path | str,
+    model_path: str,
+    *,
+    conf: float = 0.10,
+) -> Dict[str, List[tuple]]:
+    """サブフォルダを含めて探索し detect_boxes_with_yolo を呼ぶラッパー"""
+    files = list_image_files(image_dir)
+    if not files:
+        raise FileNotFoundError(f"画像が見つかりません: {image_dir}")
+    return detect_boxes_with_yolo(files, model_path, confidence=conf) 

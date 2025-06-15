@@ -15,7 +15,8 @@ def init_db(db_path: Path = DB_PATH):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             filename TEXT,
             image_path TEXT UNIQUE,
-            taken_at TEXT
+            taken_at TEXT,
+            location TEXT
         )
         """)
         c.execute("""
@@ -116,11 +117,11 @@ class ImageManager:
             cur = conn.execute("SELECT * FROM images")
             return [dict(row) for row in cur.fetchall()]
     @staticmethod
-    def add_image(filename: str, image_path: str, taken_at: Optional[str]=None) -> int:
+    def add_image(filename: str, image_path: str, taken_at: Optional[str]=None, location: Optional[str]=None) -> int:
         with DBConnection() as conn:
             cur = conn.execute(
-                "INSERT INTO images (filename, image_path, taken_at) VALUES (?, ?, ?)",
-                (filename, image_path, taken_at)
+                "INSERT INTO images (filename, image_path, taken_at, location) VALUES (?, ?, ?, ?)",
+                (filename, image_path, taken_at, location)
             )
             conn.commit()
             return cur.lastrowid
