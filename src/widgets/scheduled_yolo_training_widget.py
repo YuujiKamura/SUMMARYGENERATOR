@@ -81,7 +81,7 @@ class ScheduledYoloTrainingWidget(QMainWindow):
         form.addRow("入力 JSON", json_hbox)
 
         # 追加 CLI 引数
-        self.cli_args_edit = QLineEdit("--mode all --augment-num 5 --epochs 100")
+        self.cli_args_edit = QLineEdit("--mode all --augment-num 5 --epochs 100 --retrain-epochs 30 --retrain-loops 0")
         self.cli_args_edit.setPlaceholderText("例: --mode all --augment-num 5 --epochs 100 など")
         form.addRow("追加 CLI 引数", self.cli_args_edit)
 

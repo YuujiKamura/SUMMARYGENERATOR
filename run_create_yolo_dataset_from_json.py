@@ -182,8 +182,8 @@ def main():
     parser.add_argument('--date-to', type=str, default=None, help='対象画像の日付範囲（終了）例: 20250610')
     parser.add_argument('--augment-num', type=int, default=20, help='各画像ごとのオーグメント拡張数（デフォルト20）')
     parser.add_argument('--epochs', type=int, default=100, help='YOLO学習のエポック数')
+    parser.add_argument('--retrain-epochs', type=int, default=30, help='ハードエグザンプル再学習のエポック数')
     parser.add_argument('--retrain-loops', type=int, default=1, help='再学習ループ回数（初回学習後に何回再学習するか）')
-    parser.add_argument('--epoch-multiplier', type=int, default=2, help='再学習ごとのエポック数倍率')
     parser.add_argument('--retrain-mode', type=str, default='ask', choices=['ask', 'immediate', 'night'], help='再学習のタイミング: ask=都度確認, immediate=すぐ, night=夜間')
     parser.add_argument('--mode', type=str, default='all', choices=['all', 'augment'], help='"all"=全処理, "augment"=オーグメントのみ')
     parser.add_argument('--yolo-tmp-dir', type=str, default=None, help='既存YOLOデータセットディレクトリ（augmentモード用）')
@@ -217,8 +217,8 @@ def main():
     log.info("日付範囲: %s ～ %s", args.date_from, args.date_to)
     log.info("オーグメント拡張数: %d", args.augment_num)
     log.info("エポック数: %d", args.epochs)
+    log.info("再学習エポック数: %d", args.retrain_epochs)
     log.info("再学習ループ回数: %d", args.retrain_loops)
-    log.info("エポック倍率: %d", args.epoch_multiplier)
     log.info("再学習タイミング: %s", args.retrain_mode)
     log.info("実行モード: %s", args.mode)
 
@@ -327,7 +327,7 @@ def main():
         
         trained_model_path_obj = model_trainer.train(
             yaml_path=str(dataset_yaml_path), 
-            epochs=args.epochs, 
+            epochs=args.retrain_epochs, 
             project_dir=str(training_project_dir),
             model_path=current_model_to_train_str
         )
@@ -337,63 +337,48 @@ def main():
         
         current_model_to_train_str = str(trained_model_path_obj) # 次の再学習ループのために更新
 
-        # --- 再学習ループ（オプション） ---
+        # --- 再学習ループ（ハードエグザンプル方式） ---
         if args.retrain_loops > 0:
-            # AugmentationManagerの初期化 (model_trainerは既に初期化済み)
-            augment_manager = AugmentationManager(log, model_trainer) 
-
             for loop in range(args.retrain_loops):
-                log.info(f"[RETRAIN] 再学習ループ {loop+1}/{args.retrain_loops} 開始")
-                
-                retrain_augment_input_dir = export_target_dir 
-                retrain_augmented_dir_name = f"{export_target_dir.name}_retrain_aug_loop{loop+1}"
-                retrain_augmented_dir = export_target_dir.parent / retrain_augmented_dir_name
-                
-                log.info(f"[RETRAIN] オーグメント入力: {retrain_augment_input_dir}, 出力: {retrain_augmented_dir}")
-                # aug_db_path を db_path に修正
-                aug_summary = augment_manager.run_augmentation(retrain_augment_input_dir, args.augment_num, retrain_augmented_dir, db_path)
-                log.info(f"[RETRAIN] 再学習用オーグメントサマリー: {aug_summary}")
-                
-                insert_from_yolo_dir(retrain_augmented_dir, db_path=db_path) # aug_db_path を db_path に修正
+                log.info(f"[RETRAIN] 再学習ループ {loop+1}/{args.retrain_loops} (hard-example mining) 開始")
 
-                retrain_export_base_name = f'yolo_retrain_loop{loop+1}_exported_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}'
-                retrain_export_dir = datasets_base_dir / retrain_export_base_name
-                retrain_export_dir.mkdir(parents=True, exist_ok=True)
-                
-                # aug_db_path を db_path に修正
-                yolo_exporter_retrain = YoloDatasetExporter(output_dir=str(retrain_export_dir), val_ratio=0.2, db_path=str(db_path))
-                retrain_dataset_yaml_path_or_dict = yolo_exporter_retrain.export(force_flush=True)
+                # 1) 推論＋食い違い画像収集
+                hard_example_export_dir = datasets_base_dir / f"yolo_hard_example_loop{loop+1}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                try:
+                    mis_count = collect_mis_detect_images(
+                        model_path=current_model_to_train_str,
+                        dataset_dir=export_target_dir,
+                        output_dir=hard_example_export_dir,
+                    )
+                except Exception as e:
+                    log.error(f"[RETRAIN] hard-example mining でエラー発生: {e}")
+                    break
 
-                retrain_dataset_yaml_path: Optional[str] = None
-                if isinstance(retrain_dataset_yaml_path_or_dict, dict) and 'yaml_path' in retrain_dataset_yaml_path_or_dict:
-                    retrain_dataset_yaml_path = str(retrain_dataset_yaml_path_or_dict['yaml_path'])
-                elif isinstance(retrain_dataset_yaml_path_or_dict, (str, Path)):
-                    retrain_dataset_yaml_path = str(retrain_dataset_yaml_path_or_dict)
-                else:
-                    log.error(f"[RETRAIN] YoloDatasetExporter.export() から予期しない戻り値の型: {type(retrain_dataset_yaml_path_or_dict)}")
-                    break # このループの再学習はスキップ
+                if mis_count == 0:
+                    log.info(f"[RETRAIN] ループ {loop+1}: ミス検出が0件のため再学習を終了します")
+                    break
 
-                log.info(f"[RETRAIN][EXPORT] 再学習用DataSet書き出し: {retrain_export_dir}, YAML: {retrain_dataset_yaml_path}")
+                retrain_yaml_path = hard_example_export_dir / "data.yaml"
+                if not retrain_yaml_path.exists():
+                    log.error(f"[RETRAIN] data.yaml が見つかりません: {retrain_yaml_path}")
+                    break
 
-                if not retrain_dataset_yaml_path or not Path(retrain_dataset_yaml_path).exists():
-                    log.error(f"[RETRAIN] 再学習用データセットのYAMLファイルが見つかりません: {retrain_dataset_yaml_path}")
-                    break 
-
+                # 2) 再学習
                 retrain_project_dir = logs_dir / f"retraining_run_loop{loop+1}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
                 trained_model_path_after_retrain_obj = model_trainer.train(
-                    yaml_path=str(retrain_dataset_yaml_path), 
-                    epochs=args.epochs * (args.epoch_multiplier ** (loop + 1)), 
-                    project_dir=str(retrain_project_dir), 
-                    model_path=current_model_to_train_str 
+                    yaml_path=str(retrain_yaml_path),
+                    epochs=args.retrain_epochs,
+                    project_dir=str(retrain_project_dir),
+                    model_path=current_model_to_train_str,
                 )
 
                 if not trained_model_path_after_retrain_obj:
                     log.error(f"[RETRAIN] 再学習ループ {loop+1} に失敗しました。")
-                    break 
-                
-                current_model_to_train_str = str(trained_model_path_after_retrain_obj) 
-                log.info(f"[RETRAIN] 再学習ループ {loop+1}/{args.retrain_loops} 完了。モデル: {current_model_to_train_str}")
+                    break
+
+                current_model_to_train_str = str(trained_model_path_after_retrain_obj)
+                log.info(f"[RETRAIN] 再学習ループ {loop+1}/{args.retrain_loops} 完了。モデル更新済み: {current_model_to_train_str}")
 
         log.info(f"全ての処理が完了しました。最終モデル: {current_model_to_train_str}")
 
