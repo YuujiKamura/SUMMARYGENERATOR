@@ -53,6 +53,16 @@ class ImageEntry:
     def __repr__(self):
         return f"ImageEntry(image_path={self.image_path}, chain_records={self.chain_records})"
 
+    # --- compatibility aliases ---
+    @property
+    def path(self):
+        """Alias for image_path to maintain backward compatibility with legacy code."""
+        return self.image_path
+
+    @path.setter
+    def path(self, value: str):
+        self.image_path = value
+
 class ImageEntryList:
     """
     画像エントリー群（温度管理写真群・品質管理写真群など）を表現するデータクラス。

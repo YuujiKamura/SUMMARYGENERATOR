@@ -162,24 +162,17 @@ def export_excel_photobook(
                 ws.cell(row=row, column=2, value=f'画像読込エラー: {e}')
             else:
                 ws.cell(row=row, column=2, value='画像ファイルなし')
-            # キャプション出力
-            remarks = matched_remarks[0] if matched_remarks else ''
-            record = None
-            for r in records:
-                if getattr(r, 'remarks', None) == remarks:
-                    record = r
-                    break
+            # キャプション出力 (ChainRecord 前提で簡素化)
+            # matched_remarks は List[ChainRecord] を想定
+            record = matched_remarks[0] if matched_remarks else None
+            remarks = getattr(record, 'remarks', '') if record else ''
+
+            # ChainRecord が無い場合に備えてダミー辞書
             if record is None:
-                class Dummy:
-                    pass
-                record = Dummy()
-            # ChainRecordならto_dictで辞書化
-            if hasattr(record, 'to_dict'):
-                record_dict = record.to_dict()
-            elif hasattr(record, '__dict__'):
-                record_dict = dict(record.__dict__)
-            else:
                 record_dict = {}
+            else:
+                # ChainRecord は to_dict() を実装しているはず
+                record_dict = record.to_dict() if hasattr(record, 'to_dict') else dict(record.__dict__)
             subtype = record_dict.get('subtype', '')
             values = [
                 str(idx_in_page + 1),
