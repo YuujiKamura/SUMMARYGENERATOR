@@ -1,0 +1,204 @@
+[INFO] PathManager使用: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator
+[DEBUG] OCR_CACHE_DIR: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\ocr_tools\ocr_cache
+[DEBUG] CACHE_DIR: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\src\image_preview_cache
+[DEBUG] PRESET_ROLES_PATH: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\ocr_tools\preset_roles.json
+[DEBUG] DOCUMENTAI_CONFIG_PATH: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\ocr_tools\credential\documentai_config.json
+[DEBUG] CREDENTIAL_PATH: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\ocr_tools\credential\visionapi-437405-0cd91b6d2db4.json
+[DEBUG] 生成されたハッシュ: 990a25a3ff535378591c52ecd0aa7d6c
+[DEBUG] キャッシュファイル名: 990a25a3ff535378591c52ecd0aa7d6c.json
+[DEBUG] 生成されたハッシュ: 1d1d9efbea2ff8a6a7d695710b4faef0
+[DEBUG] キャッシュファイル名: 1d1d9efbea2ff8a6a7d695710b4faef0.json
+[LOG] キーワード候補抽出: '日付'
+[LOG] キーワード候補抽出: '台数'
+[LOG] テキスト検出結果: []
+[LOG] 場所キーワード検出開始: '場所'
+  [LOG] 場所キーワード発見: text='工事名
+場所|小山
+', x=124, y=489
+    [LOG] 次行ペア検出: '小山'
+[LOG] 場所検出結果: 1件
+[DEBUG] 生成されたハッシュ: a6ec6119ea990f2169139915ccfaf398
+[DEBUG] キャッシュファイル名: a6ec6119ea990f2169139915ccfaf398.json
+[LOG] キーワード候補抽出: '日付'
+[LOG] キーワード候補抽出: '台数'
+[LOG] テキスト検出結果: []
+[LOG] 場所キーワード検出開始: '場所'
+  [LOG] 場所キーワード発見: text='場所 小山
+', x=98, y=663
+    [LOG] 同一テキスト内ペア検出: '小山'
+[LOG] 場所検出結果: 1件
+[DEBUG] 生成されたハッシュ: bc64b5393fcc27274a7c0336e37457c1
+[DEBUG] キャッシュファイル名: bc64b5393fcc27274a7c0336e37457c1.json
+[LOG] キーワード候補抽出: '日付'
+[LOG] キーワード候補抽出: '台数'
+[LOG] テキスト検出結果: []
+[LOG] 場所キーワード検出開始: '場所'
+  [LOG] 場所キーワード発見: text='場 所 小山 No.25
+', x=840, y=715
+    [LOG] 同一テキスト内ペア検出: '小山 No.25'
+[LOG] 場所検出結果: 1件
+[DEBUG] 生成されたハッシュ: 88cf88050cde658215025b85da4adc35
+[DEBUG] キャッシュファイル名: 88cf88050cde658215025b85da4adc35.json
+[LOG] キーワード候補抽出: '日付'
+[LOG] キーワード候補抽出: '台数'
+[LOG] テキスト検出結果: []
+[LOG] 場所キーワード検出開始: '場所'
+  [LOG] 場所キーワード発見: text='場所 小山 No.25
+', x=866, y=719
+    [LOG] 同一テキスト内ペア検出: '小山 No.25'
+[LOG] 場所検出結果: 1件
+[DEBUG] 生成されたハッシュ: 18f5b6f02d98450a3774a2ec7fcbdd04
+[DEBUG] キャッシュファイル名: 18f5b6f02d98450a3774a2ec7fcbdd04.json
+[LOG] キーワード候補抽出: '日付'
+[LOG] キーワード候補抽出: '台数'
+[LOG] テキスト検出結果: []
+[LOG] 場所キーワード検出開始: '場所'
+  [LOG] 場所キーワード発見: text='場 所 小山 No.25
+', x=48, y=742
+    [LOG] 同一テキスト内ペア検出: '小山 No.25'
+[LOG] 場所検出結果: 1件
+[DEBUG] 生成されたハッシュ: 6d5cee99c3303ac3e4dd8b1e659aad15
+[DEBUG] キャッシュファイル名: 6d5cee99c3303ac3e4dd8b1e659aad15.json
+[DEBUG] 生成されたハッシュ: 68204f4ed277f4986979b7c3d5f7cca5
+[DEBUG] キャッシュファイル名: 68204f4ed277f4986979b7c3d5f7cca5.json
+[LOG] キーワード候補抽出: '日付'
+  [LOG]  キーワード検出: text='日付
+', x=384, y=416
+    [LOG]   候補値: text='5/30
+', x=604, y=418, value='5/30', distance=222
+    [LOG]   候補値: text='台数
+', x=836, y=431, value='台数', distance=467
+    [LOG]   候補値: text='1台目
+', x=1061, y=442, value='1台目', distance=703
+  [LOG]  ペア決定: keyword='日付', value='5/30', value_text='5/30
+', distance=222
+[LOG] キーワード候補抽出: '台数'
+  [LOG]  キーワード検出: text='台数
+', x=836, y=431
+    [LOG]   候補値: text='1台目
+', x=1061, y=442, value='1台目', distance=236
+  [LOG]  ペア決定: keyword='台数', value='1台目', value_text='1台目
+', distance=236
+[LOG] テキスト検出結果: [{'keyword': '日付', 'value': '5/30', 'value_text': '5/30\n', 'keyword_box': {'text': '日付\n', 'x': 384, 'y': 416}, 'value_box': {'text': '5/30\n', 'x': 604, 'y': 418}, 'distance': 222}, {'keyword': '台数', 'value': '1台目', 'value_text': '1台目\n', 'keyword_box': {'text': '台数\n', 'x': 836, 'y': 431}, 'value_box': {'text': '1台目\n', 'x': 1061, 'y': 442}, 'distance': 236}]
+[LOG] 場所キーワード検出開始: '場所'
+  [LOG] 近隣テキストボックス検索開始
+[LOG] 場所検出結果: 0件
+[DEBUG] 生成されたハッシュ: b8158570e1eed2a6b22f0c1b9523da49
+[DEBUG] キャッシュファイル名: b8158570e1eed2a6b22f0c1b9523da49.json
+[LOG] キーワード候補抽出: '日付'
+  [LOG]  キーワード検出: text='日付
+', x=910, y=689
+    [LOG]   候補値: text='東區市(2工區)填補修工事
+', x=946, y=660, value='東區市(2工區)填補修工事', distance=65
+    [LOG]   候補値: text='$130
+', x=950, y=686, value='$130', distance=43
+    [LOG]   候補値: text='台数
+再生密赖度As混合物 Bwn
+', x=941, y=688, value='台数', distance=32
+    [LOG]   候補値: text='到着温度
+', x=943, y=723, value='到着温度', distance=67
+    [LOG]   候補値: text='1585c
+', x=1034, y=722, value='1585c', distance=157
+  [LOG]  ペア決定: keyword='日付', value='台数', value_text='台数
+再生密赖度As混合物 Bwn
+', distance=32
+[LOG] キーワード候補抽出: '台数'
+  [LOG]  キーワード検出: text='台数
+再生密赖度As混合物 Bwn
+', x=941, y=688
+    [LOG]   候補値: text='$130
+', x=950, y=686, value='$130', distance=11
+    [LOG]   候補値: text='1585c
+', x=1034, y=722, value='1585c', distance=127
+  [LOG]  ペア決定: keyword='台数', value='$130', value_text='$130
+', distance=11
+[LOG] テキスト検出結果: [{'keyword': '日付', 'value': '台数', 'value_text': '台数\n再生密赖度As混合物 Bwn\n', 'keyword_box': {'text': '日付\n', 'x': 910, 'y': 689}, 'value_box': {'text': '台数\n再生密赖度As混合物 Bwn\n', 'x': 941, 'y': 688}, 'distance': 32}, {'keyword': '台数', 'value': '$130', 'value_text': '$130\n', 'keyword_box': {'text': '台数\n再生密赖度As混合物 Bwn\n', 'x': 941, 'y': 688}, 'value_box': {'text': '$130\n', 'x': 950, 'y': 686}, 'distance': 11}]
+[LOG] 場所キーワード検出開始: '場所'
+  [LOG] 近隣テキストボックス検索開始
+[LOG] 場所検出結果: 0件
+[DEBUG] 生成されたハッシュ: a128b389a758e9a34482c5900961c90a
+[DEBUG] キャッシュファイル名: a128b389a758e9a34482c5900961c90a.json
+[LOG] キーワード候補抽出: '日付'
+[LOG] キーワード候補抽出: '台数'
+[LOG] テキスト検出結果: []
+[LOG] 場所キーワード検出開始: '場所'
+  [LOG] 近隣テキストボックス検索開始
+[LOG] 場所検出結果: 0件
+[DEBUG] 生成されたハッシュ: 4766342d9cf1d31d550c6e32b1f8868b
+[DEBUG] キャッシュファイル名: 4766342d9cf1d31d550c6e32b1f8868b.json
+[DEBUG] 生成されたハッシュ: ef4cb60d8c522d0cf094e07a2dc3b023
+[DEBUG] キャッシュファイル名: ef4cb60d8c522d0cf094e07a2dc3b023.json
+[DEBUG] 生成されたハッシュ: a3fd6d241eaf0b617eb633fa1960965a
+[DEBUG] キャッシュファイル名: a3fd6d241eaf0b617eb633fa1960965a.json
+[DEBUG] 生成されたハッシュ: c1f0df33830ee3c3d2c300e17b86f0fa
+[DEBUG] キャッシュファイル名: c1f0df33830ee3c3d2c300e17b86f0fa.json
+[DEBUG] 生成されたハッシュ: d13d348be71cbb88f99c07e517094249
+[DEBUG] キャッシュファイル名: d13d348be71cbb88f99c07e517094249.json
+[DEBUG] 生成されたハッシュ: 5670ff5cd28ab25fdd499a88d955ed4a
+[DEBUG] キャッシュファイル名: 5670ff5cd28ab25fdd499a88d955ed4a.json
+[DEBUG] 生成されたハッシュ: d853abdae1508e7219b61ecc4d9ef399
+[DEBUG] キャッシュファイル名: d853abdae1508e7219b61ecc4d9ef399.json
+[DEBUG] 生成されたハッシュ: 99081b9e851549436e543d71c774ff8c
+[DEBUG] キャッシュファイル名: 99081b9e851549436e543d71c774ff8c.json
+[DEBUG] 生成されたハッシュ: db1a2f2697677271c57bc8bcdc71b1b9
+[DEBUG] キャッシュファイル名: db1a2f2697677271c57bc8bcdc71b1b9.json
+[DEBUG] 生成されたハッシュ: e63a1598a8f988981f428f900c33676c
+[DEBUG] キャッシュファイル名: e63a1598a8f988981f428f900c33676c.json
+[DEBUG] 生成されたハッシュ: bb0f550e15d9276131736083ed15442c
+[DEBUG] キャッシュファイル名: bb0f550e15d9276131736083ed15442c.json
+[LOG] キーワード候補抽出: '日付'
+[LOG] キーワード候補抽出: '台数'
+[LOG] テキスト検出結果: []
+[LOG] 場所キーワード検出開始: '場所'
+  [LOG] 近隣テキストボックス検索開始
+[LOG] 場所検出結果: 0件
+[DEBUG] 生成されたハッシュ: 582015802f82551ba6ef8b4aba1a1ffa
+[DEBUG] キャッシュファイル名: 582015802f82551ba6ef8b4aba1a1ffa.json
+[DEBUG] 生成されたハッシュ: 4b4413d58639c30f470f4dcba34f6f92
+[DEBUG] キャッシュファイル名: 4b4413d58639c30f470f4dcba34f6f92.json
+[DEBUG] 生成されたハッシュ: 75c75192b7daf275cebf1771279d023f
+[DEBUG] キャッシュファイル名: 75c75192b7daf275cebf1771279d023f.json
+[DEBUG] 生成されたハッシュ: 0bcc4084049b70d594f1b8b9eb29aa07
+[DEBUG] キャッシュファイル名: 0bcc4084049b70d594f1b8b9eb29aa07.json
+[LOG] キーワード候補抽出: '日付'
+[LOG] キーワード候補抽出: '台数'
+[LOG] テキスト検出結果: []
+[LOG] 場所キーワード検出開始: '場所'
+  [LOG] 近隣テキストボックス検索開始
+[LOG] 場所検出結果: 0件
+[DEBUG] 生成されたハッシュ: db319ce1d81641d786b23331f2c2fa53
+[DEBUG] キャッシュファイル名: db319ce1d81641d786b23331f2c2fa53.json
+[DEBUG] 生成されたハッシュ: 129f2397f6026a8e08b22f010378fa8b
+[DEBUG] キャッシュファイル名: 129f2397f6026a8e08b22f010378fa8b.json
+[DEBUG] 生成されたハッシュ: caf4139f05deed8bd103ea171ebe730b
+[DEBUG] キャッシュファイル名: caf4139f05deed8bd103ea171ebe730b.json
+[DEBUG] 生成されたハッシュ: 32769f680ba985c4b9379baa33bdb9ad
+[DEBUG] キャッシュファイル名: 32769f680ba985c4b9379baa33bdb9ad.json
+[DEBUG] 生成されたハッシュ: 7640d295830b53fa0ce21c67468c4c9e
+[DEBUG] キャッシュファイル名: 7640d295830b53fa0ce21c67468c4c9e.json
+[DEBUG] 生成されたハッシュ: b7c170b0ae9b26d067cb242a359d03c6
+[DEBUG] キャッシュファイル名: b7c170b0ae9b26d067cb242a359d03c6.json
+[DEBUG] 生成されたハッシュ: b3410a1a297a6233add2b0eeb2d117c0
+[DEBUG] キャッシュファイル名: b3410a1a297a6233add2b0eeb2d117c0.json
+[DEBUG] 生成されたハッシュ: 8e003b725ee6443e588a6d66df101159
+[DEBUG] キャッシュファイル名: 8e003b725ee6443e588a6d66df101159.json
+[DEBUG] 生成されたハッシュ: 742834fbba8c7943a914479dda49c273
+[DEBUG] キャッシュファイル名: 742834fbba8c7943a914479dda49c273.json
+[DEBUG] 生成されたハッシュ: fb11af5c6e9c5c4e18abd35a898a6e63
+[DEBUG] キャッシュファイル名: fb11af5c6e9c5c4e18abd35a898a6e63.json
+[DEBUG] 生成されたハッシュ: 94d5f0e6a968c098b78bffa06a9d3bad
+[DEBUG] キャッシュファイル名: 94d5f0e6a968c098b78bffa06a9d3bad.json
+[DEBUG] 生成されたハッシュ: 2d4ceb49c045d6e2cc434957356b9c32
+[DEBUG] キャッシュファイル名: 2d4ceb49c045d6e2cc434957356b9c32.json
+[DEBUG] 生成されたハッシュ: cc7855e12e57e12e87e215f7dd7cdf39
+[DEBUG] キャッシュファイル名: cc7855e12e57e12e87e215f7dd7cdf39.json
+[DEBUG] 生成されたハッシュ: 7168c20a0b1daf16506dd19788b16c46
+[DEBUG] キャッシュファイル名: 7168c20a0b1daf16506dd19788b16c46.json
+総件数: 39
+OCR キャッシュあり: 10
+期待値取得成功: 7
+
+=== キャプションボードサイズ分析 ===
+
+成功ケース詳細: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\logs\caption_board_ocr_eval_20250616_151924.json
+サイズ分析結果: C:\Users\yuuji\Sanyuu2Kouku\cursor_tools\summarygenerator\logs\caption_board_size_analysis_20250616_151924.json
