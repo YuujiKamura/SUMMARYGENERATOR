@@ -1,6 +1,9 @@
 # Ignore YOLO dataset output
 src/datasets/
-credential/
+ocr-tools/credential/
+# OCRツール認証ファイル
+ocr_tools/credential/*.json
+ocr_tools/credential/visionapi-*.json
 # Pythonキャッシュ・ビルド生成物
 __pycache__/
 *.pyc

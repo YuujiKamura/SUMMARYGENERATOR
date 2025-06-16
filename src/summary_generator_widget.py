@@ -360,11 +360,12 @@ class SummaryGeneratorWidget(QMainWindow):
             pass
 
     def open_image_list_json(self):
-        # UIクラスのopen_image_list_jsonを呼び出すだけに委譲
-        if hasattr(self.ui, 'open_image_list_json'):
-            self.ui.open_image_list_json()
-        else:
-            pass
+        """画像リスト JSON 選択を外部アクションに委譲。"""
+        from src.actions.open_image_list_action import open_image_list_json_dialog
+
+        file_path = open_image_list_json_dialog(self, getattr(self, 'json_path_edit', None))
+        if file_path:
+            self.load_image_list_from_path_manager()
 
     def create_yolo_dataset(self):
         # UIクラスのcreate_yolo_datasetを呼び出すだけに委譲
