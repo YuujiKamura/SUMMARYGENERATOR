@@ -8,9 +8,13 @@ from __future__ import annotations
 from typing import List, Optional
 import os
 
-from exif_utils import get_capture_time_with_fallback, extract_image_number
-from survey_point import SurveyPoint
-from src.utils.image_entry import ImageEntryList, ImageEntry
+# 長過ぎる import 行を分割
+from .exif_utils import (
+    extract_image_number,
+)
+from .survey_point import SurveyPoint
+# flake8: noqa: E501  # ドキュメント行の日本語は長くなりがちなため許容
+from src.utils.image_entry import ImageEntryList
 
 class SupplementRunner:
     """前後画像の文脈を利用して SurveyPoint を補完する実行クラス"""
@@ -24,56 +28,100 @@ class SupplementRunner:
             return []
 
         # sort by image number
-        sorted_entries = sorted(valid_entries, key=lambda x: extract_image_number(x.image_path))
+        sorted_entries = sorted(
+            valid_entries,
+            key=lambda x: extract_image_number(x.image_path),
+        )
         final_results: List[dict] = []
 
-        # 順方向パス ------------------------------------------------------
+        # 単一パスで順方向に走査し、必要に応じてその場で補完 ----------------
         for i, entry in enumerate(sorted_entries):
             sp = entry.survey_point
+            # survey_point が存在し、不完全な場合のみ補完を試みる
             if sp is None:
-                # create basic SurveyPoint
-                capture = get_capture_time_with_fallback(entry.image_path)
-                if capture is None:
-                    try:
-                        capture = os.path.getmtime(entry.image_path)
-                    except:  # noqa: E722
-                        pass
-                sp = SurveyPoint(capture_time=capture)
-                sp.filename = os.path.basename(entry.image_path)
-                sp.image_path = entry.image_path
-
-            # 前後候補
-            prev_sp: Optional[SurveyPoint] = None
-            next_sp: Optional[SurveyPoint] = None
-
-            for j in range(i - 1, -1, -1):
-                if sorted_entries[j].survey_point:
-                    prev_sp = sorted_entries[j].survey_point
-                    break
-            for j in range(i + 1, len(sorted_entries)):
-                if sorted_entries[j].survey_point:
-                    next_sp = sorted_entries[j].survey_point
-                    break
-
-            supplemented = sp.supplemented_by_closest(prev_sp, next_sp, time_window_sec, keys=["location", "date_count"])
-            # update lists
-            entry.survey_point = supplemented
-            sorted_entries[i].survey_point = supplemented
-            final_results.append(supplemented.to_dict())
-
-        # 逆方向パス（date_count 取りこぼし） -----------------------------
-        for i in reversed(range(len(sorted_entries))):
-            entry = sorted_entries[i]
-            sp = entry.survey_point
-            if sp is None or not sp.needs("date_count"):
                 continue
-            next_sp = None
-            for j in range(i + 1, len(sorted_entries)):
-                if sorted_entries[j].survey_point:
-                    next_sp = sorted_entries[j].survey_point
-                    break
-            if next_sp and sp.supplement_from(next_sp, keys=["date_count"]):
-                entry.survey_point = sp
-                final_results[i] = sp.to_dict()
 
-        return final_results 
+            if hasattr(sp, "is_incomplete") and sp.is_incomplete():
+
+                # 前後の survey_point を探索
+                prev_sp: Optional[SurveyPoint] = None
+                next_sp: Optional[SurveyPoint] = None
+
+                # 前方向探索（i-1, i-2, ...）
+                for j in range(i - 1, -1, -1):
+                    cand_sp = sorted_entries[j].survey_point
+                    if cand_sp is not None:
+                        prev_sp = cand_sp
+                        break
+
+                # 後方向探索（i+1, i+2, ...）
+                for j in range(i + 1, len(sorted_entries)):
+                    cand_sp = sorted_entries[j].survey_point
+                    if cand_sp is not None:
+                        next_sp = cand_sp
+                        break
+
+                supplemented = SupplementRunner.supplement_by_closest(
+                    sp,
+                    prev_sp,
+                    next_sp,
+                    time_window_sec=time_window_sec,
+                    keys=["location", "date_count"],
+                )
+
+                # update lists
+                entry.survey_point = supplemented
+                sorted_entries[i].survey_point = supplemented
+
+            # ループ毎に現在の survey_point を結果に追加
+            final_results.append(entry.survey_point.to_dict())
+
+        return final_results
+
+    @staticmethod
+    def supplement_by_closest(
+        sp: "SurveyPoint",
+        prev_sp: Optional["SurveyPoint"],
+        next_sp: Optional["SurveyPoint"],
+        time_window_sec: int = 900,
+        keys: Optional[list[str]] = None,
+    ) -> "SurveyPoint":
+        """`sp` を中心に前後の `SurveyPoint` を比較し、撮影時刻が近い方の
+        情報で補完したコピーを返す。オリジナル `sp` は変更しない。
+
+        * `time_window_sec` を超える差の場合は補完を行わず、そのままコピーを返す。
+        * `keys` が省略された場合は ["location", "date_count"] を対象とする。
+        """
+
+        import copy
+
+        if keys is None:
+            keys = ["location", "date_count"]
+
+        # deepcopy してから補完を適用
+        new_sp = copy.deepcopy(sp)
+
+        # capture_time が無い場合は補完しない
+        if new_sp.capture_time is None:
+            return new_sp
+
+        # 候補を距離付きで収集
+        cands = []
+        for neigh in (prev_sp, next_sp):
+            if neigh and neigh.capture_time is not None:
+                diff = abs(neigh.capture_time - new_sp.capture_time)
+                cands.append((diff, neigh))
+
+        if not cands:
+            # 補完元候補無し
+            return new_sp
+
+        # 最も近い候補
+        diff, best_neigh = min(cands, key=lambda t: t[0])
+        if diff > time_window_sec:
+            # 設定された許容差を超える場合は補完しない
+            return new_sp
+
+        # 実際に補完
+        new_sp.supplement_from(best_neigh, keys)
+        return new_sp 
