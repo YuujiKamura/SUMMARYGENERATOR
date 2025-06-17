@@ -55,6 +55,9 @@ class CaptionBoardOCRPipeline:
             
         # キャプションボード画像かチェック
         if not self._has_caption_board_bbox(image_entry):
+            # INFO: キャプションボードが無い場合のログを出力し、基本情報のみ設定
+            import sys
+            print(f"[INFO] ボード無し: {os.path.basename(image_entry.image_path)} — Skip OCR", file=sys.stderr)
             # 非キャプションボード画像の場合、基本的なSurveyPointを作成
             survey_point = self._create_basic_survey_point(image_entry)
             image_entry.survey_point = survey_point
@@ -93,6 +96,7 @@ class CaptionBoardOCRPipeline:
         # キャプションボードのbboxを取得
         caption_board_bbox = image_entry.get_caption_board_bbox()
         if not caption_board_bbox:
+            # まれにbboxが取得できない場合は早期リターン（上位でログ済み）
             return None
             
         try:
