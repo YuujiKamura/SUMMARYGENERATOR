@@ -310,26 +310,43 @@ def reset_all_tables(db_path=DB_PATH):
 
 class SurveyPointManager:
     @staticmethod
-    def upsert_survey_point(image_id: int, sp_dict: dict):
+    def upsert_survey_point(image_id: int, sp_dict: dict, conn: sqlite3.Connection | None = None):
         """image_id をキーに survey_points を挿入 or 更新"""
-        with DBConnection() as conn:
-            cur = conn.execute("SELECT id FROM survey_points WHERE image_id=?", (image_id,))
-            row = cur.fetchone()
-            location = sp_dict.get("location_value") or sp_dict.get("inferred_location")
-            date_val = sp_dict.get("date_value")
-            count_val = sp_dict.get("count_value")
-            date_count = sp_dict.get("inferred_date_count") or sp_dict.get("date_count")
-            values_json = json.dumps(sp_dict.get("values", {}), ensure_ascii=False)
-            inferred_json = json.dumps(sp_dict.get("inferred_values", {}), ensure_ascii=False)
-            capture_time = sp_dict.get("capture_time")
-            if row:
-                conn.execute(
-                    """UPDATE survey_points SET location=?, date_value=?, count_value=?, date_count=?, values_json=?, inferred_json=?, capture_time=? WHERE image_id=?""",
-                    (location, date_val, count_val, date_count, values_json, inferred_json, capture_time, image_id)
-                )
-            else:
-                conn.execute(
-                    """INSERT INTO survey_points (image_id, location, date_value, count_value, date_count, values_json, inferred_json, capture_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (image_id, location, date_val, count_val, date_count, values_json, inferred_json, capture_time)
-                )
+        own_conn = False
+        if conn is None:
+            conn = DBConnection().__enter__()
+            own_conn = True
+        cur = conn.execute("SELECT id FROM survey_points WHERE image_id=?", (image_id,))
+        row = cur.fetchone()
+        location = sp_dict.get("location_value") or sp_dict.get("inferred_location")
+        date_val = sp_dict.get("date_value")
+        count_val = sp_dict.get("count_value")
+        date_count = sp_dict.get("inferred_date_count") or sp_dict.get("date_count")
+        values_json = json.dumps(sp_dict.get("values", {}), ensure_ascii=False)
+        inferred_json = json.dumps(sp_dict.get("inferred_values", {}), ensure_ascii=False)
+        capture_time = sp_dict.get("capture_time")
+        if row:
+            conn.execute(
+                """UPDATE survey_points SET location=?, date_value=?, count_value=?, date_count=?, values_json=?, inferred_json=?, capture_time=? WHERE image_id=?""",
+                (location, date_val, count_val, date_count, values_json, inferred_json, capture_time, image_id)
+            )
+        else:
+            conn.execute(
+                """INSERT INTO survey_points (image_id, location, date_value, count_value, date_count, values_json, inferred_json, capture_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (image_id, location, date_val, count_val, date_count, values_json, inferred_json, capture_time)
+            )
+        if own_conn:
             conn.commit()
+            conn.close()
+
+# --- Migration helpers -------------------------------------------------
+
+def ensure_images_columns():
+    """既存 images テーブルに location / taken_at カラムが無ければ追加する"""
+    with DBConnection() as conn:
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(images)").fetchall()]
+        if 'taken_at' not in cols:
+            conn.execute("ALTER TABLE images ADD COLUMN taken_at TEXT")
+        if 'location' not in cols:
+            conn.execute("ALTER TABLE images ADD COLUMN location TEXT")
+        conn.commit()
