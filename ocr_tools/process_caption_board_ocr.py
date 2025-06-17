@@ -25,6 +25,7 @@ from exif_utils import get_capture_time_with_fallback, extract_image_number
 from survey_point import SurveyPoint
 from ocr_value_extractor import init_documentai_engine
 from src.utils.image_entry import ImageEntry, ImageEntryList
+from ocr_tools.supplement_runner import SupplementRunner
 
 # --- パラメータ ---
 TIME_WINDOW_SEC = 300  # 5分以内を隣接とみなす
@@ -172,124 +173,6 @@ def _load_image_entries(target_filename=None) -> ImageEntryList:
     
     return ImageEntryList(entries=entries, group_type='caption_board_images')
 
-def _supplement_survey_points(image_entries: ImageEntryList) -> List[dict]:
-    """SurveyPointの補完処理を実行し、最終結果のdictリストを返す"""
-    entries = image_entries.entries
-    
-    # 全エントリを対象とし、image_pathがあるエントリのみを抽出
-    valid_entries = [entry for entry in entries if entry.image_path is not None]
-    
-    if not valid_entries:
-        return []
-    
-    print(f"DEBUG: 有効エントリ数: {len(valid_entries)}")
-    
-    # capture_timeでソート（SurveyPointがない場合はファイル更新時刻を使用）
-    sorted_entries = sorted(
-        valid_entries, 
-        key=lambda x: (
-            extract_image_number(x.image_path) if x.image_path else 0
-        )
-    )
-    
-    print(f"DEBUG: ソート後エントリ数: {len(sorted_entries)}")
-    
-    # 補完処理
-    final_results = []
-    for i, entry in enumerate(sorted_entries):
-        current_sp = entry.survey_point
-        
-        # SurveyPointがない場合は前後から補完を試行
-        if current_sp is None:
-            # 基本的なSurveyPointを作成
-            from survey_point import SurveyPoint
-            if entry.image_path:  # image_pathがNoneでないことを確認
-                capture_time = get_capture_time_with_fallback(entry.image_path)
-                if capture_time is None:
-                    try:
-                        capture_time = os.path.getmtime(entry.image_path)
-                    except:
-                        pass
-                        
-                current_sp = SurveyPoint(
-                    capture_time=capture_time
-                )
-                current_sp.filename = os.path.basename(entry.image_path)
-                current_sp.image_path = entry.image_path
-            else:
-                continue  # image_pathがNoneの場合はスキップ
-                
-        # 前後のSurveyPointを取得
-        prev_sp = None
-        next_sp = None
-        
-        # 前方向の有効なSurveyPointを探す
-        for j in range(i-1, -1, -1):
-            if sorted_entries[j].survey_point is not None:
-                prev_sp = sorted_entries[j].survey_point
-                break
-                
-        # 後方向の有効なSurveyPointを探す
-        for j in range(i+1, len(sorted_entries)):
-            if sorted_entries[j].survey_point is not None:
-                next_sp = sorted_entries[j].survey_point
-                break
-        
-        # デバッグ出力：前後のSurveyPoint情報
-        current_filename = os.path.basename(entry.image_path) if entry.image_path else 'None'
-        prev_location = prev_sp.get('location') if prev_sp else None
-        next_location = next_sp.get('location') if next_sp else None
-        current_location = current_sp.get('location') if current_sp else None
-        
-        if current_filename == "RIMG8586.JPG":
-            print(f"DEBUG: RIMG8586補完詳細:")
-            print(f"  - 現在: {current_location}")
-            print(f"  - 前: {prev_location} (index={i-1 if i > 0 else 'なし'})")
-            print(f"  - 後: {next_location} (index={i+1 if i < len(sorted_entries)-1 else 'なし'})")
-            print(f"  - capture_time: {current_sp.capture_time if current_sp else 'なし'}")
-            print(f"  - needs_location: {current_sp.needs('location') if current_sp else 'なし'}")
-        
-        # 近接画像からの補完
-        supplemented_sp = current_sp.supplemented_by_closest(
-            prev_sp, next_sp, TIME_WINDOW_SEC, keys=["location", "date_count"]
-        )
-        
-        # 補完状況をデバッグ出力
-        original_location = current_sp.get('location') if current_sp else None
-        supplemented_location = supplemented_sp.get('location')
-        if original_location != supplemented_location and entry.image_path:
-            filename = os.path.basename(entry.image_path)
-            print(f"DEBUG: 補完実行 {filename}: '{original_location}' -> '{supplemented_location}'")
-        
-        final_results.append(supplemented_sp.to_dict())
-        # 後続エントリの補完に利用できるよう、エントリ自身を更新
-        sorted_entries[i].survey_point = supplemented_sp
-        entry.survey_point = supplemented_sp  # 元のリストにも反映
-        
-        print(f"DEBUG: {i+1:2d}. {os.path.basename(entry.image_path) if entry.image_path else 'None'}")
-    
-    # --- 後向きパスでもう一度補完（日付台数など前側から補完） ---
-    for i in reversed(range(len(sorted_entries))):
-        entry = sorted_entries[i]
-        sp = entry.survey_point
-        if sp is None or not sp.needs("date_count"):
-            continue
-        # 後ろ側 (次) を優先する
-        next_sp = None
-        for j in range(i+1, len(sorted_entries)):
-            if sorted_entries[j].survey_point is not None:
-                next_sp = sorted_entries[j].survey_point
-                break
-        if next_sp is None:
-            continue
-        supplemented = sp.supplement_from(next_sp, keys=["date_count"])
-        if supplemented:
-            entry.survey_point = sp
-            final_results[i] = sp.to_dict()
-    
-    print(f"DEBUG: 最終結果数: {len(final_results)}")
-    return final_results
-
 def process_caption_board_ocr(args):
     """ImageEntry中心の新しいパイプライン処理"""
     # --verbose/-v が無ければ quiet モード（詳細ログ抑止）
@@ -323,8 +206,8 @@ def process_caption_board_ocr(args):
         for entry in image_entries.entries:
             pipeline.process_image_entry(entry)
 
-        # 4. SurveyPointの補完処理
-        final_results = _supplement_survey_points(image_entries)
+        # 4. SurveyPointの補完処理（モジュールへ委譲）
+        final_results = SupplementRunner.run(image_entries, TIME_WINDOW_SEC)
 
     # stdout 復帰後にサマリーのみ出力
     _sys.stdout = _original_stdout
