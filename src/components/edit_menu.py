@@ -1,6 +1,8 @@
 from PyQt6.QtWidgets import QMenu, QDialog, QVBoxLayout
 from PyQt6.QtGui import QAction
 
+from src.actions.ocr_detection_action import run_ocr_detection  # 独立モジュール
+
 def create_edit_menu(parent, dictionary_manager):
     edit_menu = QMenu("編集", parent)
 
@@ -32,5 +34,10 @@ def create_edit_menu(parent, dictionary_manager):
         parent._dictionary_editor_dialog.show()
     act_edit_dictionary.triggered.connect(open_dictionary_editor_dialog)
     edit_menu.addAction(act_edit_dictionary)
+
+    # --- OCR測点検出 ---------------------------------------------------
+    act_ocr_detect = QAction("OCR測点検出", parent)
+    act_ocr_detect.triggered.connect(lambda: run_ocr_detection(parent))
+    edit_menu.addAction(act_ocr_detect)
 
     return edit_menu

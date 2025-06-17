@@ -90,6 +90,21 @@ def init_db(db_path: Path = DB_PATH):
                 mapping_json TEXT
             )
         ''')
+        # SurveyPoint テーブル
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS survey_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                image_id INTEGER UNIQUE,
+                location TEXT,
+                date_value TEXT,
+                count_value TEXT,
+                date_count TEXT,
+                values_json TEXT,
+                inferred_json TEXT,
+                capture_time REAL,
+                FOREIGN KEY(image_id) REFERENCES images(id)
+            )
+        ''')
         # UNIQUE制約インデックス
         c.execute("PRAGMA index_list(images)")
         indexes = [row[1] for row in c.fetchall()]
@@ -292,3 +307,29 @@ def reset_all_tables(db_path=DB_PATH):
         conn.execute('DELETE FROM image_chain_assignments')
         conn.execute('DELETE FROM role_mappings')
         conn.commit()
+
+class SurveyPointManager:
+    @staticmethod
+    def upsert_survey_point(image_id: int, sp_dict: dict):
+        """image_id をキーに survey_points を挿入 or 更新"""
+        with DBConnection() as conn:
+            cur = conn.execute("SELECT id FROM survey_points WHERE image_id=?", (image_id,))
+            row = cur.fetchone()
+            location = sp_dict.get("location_value") or sp_dict.get("inferred_location")
+            date_val = sp_dict.get("date_value")
+            count_val = sp_dict.get("count_value")
+            date_count = sp_dict.get("inferred_date_count") or sp_dict.get("date_count")
+            values_json = json.dumps(sp_dict.get("values", {}), ensure_ascii=False)
+            inferred_json = json.dumps(sp_dict.get("inferred_values", {}), ensure_ascii=False)
+            capture_time = sp_dict.get("capture_time")
+            if row:
+                conn.execute(
+                    """UPDATE survey_points SET location=?, date_value=?, count_value=?, date_count=?, values_json=?, inferred_json=?, capture_time=? WHERE image_id=?""",
+                    (location, date_val, count_val, date_count, values_json, inferred_json, capture_time, image_id)
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO survey_points (image_id, location, date_value, count_value, date_count, values_json, inferred_json, capture_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (image_id, location, date_val, count_val, date_count, values_json, inferred_json, capture_time)
+                )
+            conn.commit()
