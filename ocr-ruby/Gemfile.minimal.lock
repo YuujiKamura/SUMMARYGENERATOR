@@ -1,0 +1,15 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    json (2.12.2)
+    pathname (0.4.0)
+
+PLATFORMS
+  x64-mingw-ucrt
+
+DEPENDENCIES
+  json
+  pathname
+
+BUNDLED WITH
+   2.4.19

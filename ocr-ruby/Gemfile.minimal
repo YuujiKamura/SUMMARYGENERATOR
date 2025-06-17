@@ -1,0 +1,5 @@
+source 'https://rubygems.org'
+
+# 基本gemのみ（DocumentAIとEXIFRはデモモードでスキップ）
+gem 'json'
+gem 'pathname'

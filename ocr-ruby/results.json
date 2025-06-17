@@ -1,0 +1,80 @@
+[
+  {
+    "filename": null,
+    "image_path": "test_images/IMG001.jpg",
+    "capture_time": 1717030860.0,
+    "bbox": null,
+    "location_value": "大田原",
+    "date_value": "5/30",
+    "count_value": "2台目",
+    "inferred_location": null,
+    "inferred_date_count": null,
+    "ocr_skipped": null,
+    "ocr_skip_reason": null
+  },
+  {
+    "filename": null,
+    "image_path": "test_images/IMG002.jpg",
+    "capture_time": 1717030920.0,
+    "bbox": null,
+    "location_value": "那須塩原",
+    "date_value": "6/1",
+    "count_value": "1台目",
+    "inferred_location": null,
+    "inferred_date_count": null,
+    "ocr_skipped": null,
+    "ocr_skip_reason": null
+  },
+  {
+    "filename": null,
+    "image_path": "test_images/IMG003.jpg",
+    "capture_time": 1717030980.0,
+    "bbox": null,
+    "location_value": "宇都宮",
+    "date_value": "6/1",
+    "count_value": "3台目",
+    "inferred_location": null,
+    "inferred_date_count": null,
+    "ocr_skipped": null,
+    "ocr_skip_reason": null
+  },
+  {
+    "filename": null,
+    "image_path": "test_images/IMG004.jpg",
+    "capture_time": 1717031040.0,
+    "bbox": null,
+    "location_value": null,
+    "date_value": null,
+    "count_value": null,
+    "inferred_location": "宇都宮",
+    "inferred_date_count": "6/1|3台目",
+    "ocr_skipped": null,
+    "ocr_skip_reason": null
+  },
+  {
+    "filename": null,
+    "image_path": "test_images/IMG005.jpg",
+    "capture_time": 1717031100.0,
+    "bbox": null,
+    "location_value": "小山",
+    "date_value": null,
+    "count_value": null,
+    "inferred_location": "宇都宮",
+    "inferred_date_count": "6/1|3台目",
+    "ocr_skipped": null,
+    "ocr_skip_reason": null
+  },
+  {
+    "filename": null,
+    "image_path": "test_images/IMG006.jpg",
+    "capture_time": 1717031160.0,
+    "bbox": null,
+    "location_value": "小山",
+    "date_value": "5/30",
+    "count_value": "1台目",
+    "inferred_location": "宇都宮",
+    "inferred_date_count": null,
+    "ocr_skipped": null,
+    "ocr_skip_reason": null
+  }
+]
