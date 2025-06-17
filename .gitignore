@@ -43,3 +43,19 @@ src/data/
 *.temp
 # その他
 runs/
+
+# Ruby OCR画像ファイル
+ocr-ruby/test_images/*.jpg
+ocr-ruby/test_images/*.JPG
+ocr-ruby/test_images/*.jpeg
+ocr-ruby/test_images/*.JPEG
+ocr-ruby/test_images/*.png
+ocr-ruby/test_images/*.PNG
+ocr-ruby/test_images/*.gif
+ocr-ruby/test_images/*.GIF
+ocr-ruby/test_images/*.bmp
+ocr-ruby/test_images/*.BMP
+ocr-ruby/test_images/*.tiff
+ocr-ruby/test_images/*.TIFF
+ocr-ruby/test_images/*.webp
+ocr-ruby/test_images/*.WEBP
