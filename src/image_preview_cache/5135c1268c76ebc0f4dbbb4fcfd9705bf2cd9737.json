@@ -38,5 +38,26 @@
       "role": "backhoe_mini"
     }
   ],
-  "location": "小山No.25"
+  "location": ")請裝補修工事(水防等含)(學顧契約)",
+  "survey_point": {
+    "bbox": {
+      "id": 17554,
+      "image_id": 5109,
+      "cid": 1,
+      "cname": "caption_board",
+      "conf": 0.8996641635894775,
+      "x1": 0.0,
+      "y1": 674.3145751953125,
+      "x2": 375.3543701171875,
+      "y2": 929.6441650390625,
+      "role": null
+    },
+    "ocr_skipped": null,
+    "ocr_skip_reason": null,
+    "filename": "RIMG8565.JPG",
+    "image_path": "H:\\マイドライブ\\〇東区市道（2工区）舗装補修工事（水防等含）（単価契約）\\６工事写真\\0530小山工区\\RIMG8565.JPG",
+    "capture_time": 1748567597.0,
+    "location_value": ")請裝補修工事(水防等含)(學顧契約)"
+  },
+  "capture_time": 1748567597.0
 }

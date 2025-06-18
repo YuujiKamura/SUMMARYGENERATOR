@@ -93,7 +93,8 @@ def analyze_failed_cases():
             print("  マスターデータで見つかりませんでした")
 
 def format_case_header(image_path, filename, ocr_cache_status, status_prefix):
-    return f"\n{status_prefix} {os.path.basename(image_path)}\n  ファイル名: {filename}\n  OCRキャッシュ: {ocr_cache_status}"
+    abs_image_path = os.path.abspath(image_path)
+    return f"\n{status_prefix} {os.path.basename(image_path)}\n  画像絶対パス: {abs_image_path}\n  ファイル名: {filename}\n  OCRキャッシュ: {ocr_cache_status}"
 
 def format_bbox_line(name_to_display, detection_source, w, h, bbox_specific_area):
     return f"  - {name_to_display} ({detection_source}, サイズ: {w}×{h}px [{bbox_specific_area:,} px²])"

@@ -64,6 +64,12 @@ class SurveyPoint:
         if date_val and cnt_val:
             vals["date_count"] = f"{date_val}|{cnt_val}"
 
+        # metaをrawからそのまま引き継ぐ（判定根拠も含める）
+        meta = raw.get("meta", {})
+        if not meta:
+            meta = {k: raw.get(k) for k in ("bbox", "ocr_skipped", "ocr_skip_reason")}
+        meta["decision_source"] = meta.get("decision_source", "ocr")
+
         return SurveyPoint(
             capture_time=raw.get("capture_time"),
             site_name=raw.get("site_name"),
@@ -72,7 +78,7 @@ class SurveyPoint:
             filename=raw.get("filename", ""),
             image_path=raw.get("image_path", ""),
             values=vals,
-            meta={k: raw.get(k) for k in ("bbox", "ocr_skipped", "ocr_skip_reason")},
+            meta=meta,
         )
 
     # --- query helpers ---------------------------------------------------
@@ -90,14 +96,10 @@ class SurveyPoint:
             # locationの場合は、不完全な値があっても補完する
             if not self.is_located():
                 self.inferred_values[key] = value
-        elif key == "date_count":
-            # date_count は数値付き台数が無い場合は上書き許可
-            if self.needs("date_count"):
-                self.inferred_values[key] = value
+                self.meta["decision_source"] = "inferred"
         else:
-            # その他のキーは従来通り
-            if not self.has(key):
-                self.inferred_values[key] = value
+            self.inferred_values[key] = value
+            self.meta["decision_source"] = "inferred"
 
     def needs(self, key: str) -> bool:
         """key の補完が必要か判定。不完全な情報も補完対象とする。"""
@@ -139,6 +141,16 @@ class SurveyPoint:
             except ImportError:
                 from location_inference import is_incomplete_survey_point_location
             return not is_incomplete_survey_point_location(location_value)
+        return False
+
+    def isIncorrect(self) -> bool:
+        """測点が不完全または不正確であるか判定"""
+        # locationが存在しない、または不完全な場合
+        if not self.has("location") or not self.is_located():
+            return True
+        # date_countが不完全な場合も不正確とみなす
+        if not self.has("date_count"):
+            return True
         return False
 
     # --- supplement ------------------------------------------------------
@@ -236,4 +248,32 @@ class SurveyPoint:
         if "date_count" in self.inferred_values:
             raw["inferred_date_count"] = self.inferred_values["date_count"]
 
-        return raw 
+        # metaを必ず含める
+        raw["meta"] = copy.deepcopy(self.meta)
+        return raw
+
+    def get_display_value(self) -> str:
+        """
+        サマリーやUI表示用の代表値を返す。
+        - matched_location_pairがあればその値
+        - matched_date_pairとmatched_count_pairが両方あれば「日付 台数」
+        - それ以外は従来通り
+        """
+        meta = self.meta or {}
+        matched_location_pair = meta.get('matched_location_pair')
+        matched_date_pair = meta.get('matched_date_pair')
+        matched_count_pair = meta.get('matched_count_pair')
+        if matched_location_pair:
+            return matched_location_pair.get('value', '')
+        elif matched_date_pair and matched_count_pair:
+            date_val = matched_date_pair.get('value', '')
+            count_val = matched_count_pair.get('value', '')
+            return f"{date_val} {count_val}"
+        # fallback: location, date_count, status, etc.
+        loc = self.get('location')
+        if loc:
+            return loc
+        dc = self.get('date_count')
+        if dc:
+            return dc
+        return "情報なし"

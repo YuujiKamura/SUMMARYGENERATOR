@@ -2,6 +2,7 @@ import os
 import sys
 from datetime import datetime
 from typing import List, Optional
+import logging
 
 # --- パス設定と基本インポート ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -44,20 +45,18 @@ class CaptionBoardOCRPipeline:
             self.engine = init_documentai_engine()
             return True
         except Exception as e:
-            print(f"DocumentAI エンジンの初期化に失敗: {e}")
+            logging.error(f"DocumentAI エンジンの初期化に失敗: {e}")
             return False
     
     def process_image_entry(self, image_entry: ImageEntry) -> ImageEntry:
         """ImageEntryに対してOCR処理を実行し、SurveyPointを設定"""
         if not self.engine:
-            print("エンジンが初期化されていません")
+            logging.error("エンジンが初期化されていません")
             return image_entry
             
         # キャプションボード画像かチェック
         if not self._has_caption_board_bbox(image_entry):
-            # INFO: キャプションボードが無い場合のログを出力し、基本情報のみ設定
-            import sys
-            print(f"[INFO] ボード無し: {os.path.basename(image_entry.image_path)} — Skip OCR", file=sys.stderr)
+            logging.info(f"[INFO] ボード無し: {os.path.basename(image_entry.image_path) if image_entry.image_path else 'None'} — Skip OCR")
             # 非キャプションボード画像の場合、基本的なSurveyPointを作成
             survey_point = self._create_basic_survey_point(image_entry)
             image_entry.survey_point = survey_point
@@ -125,25 +124,28 @@ class CaptionBoardOCRPipeline:
             return raw_ocr_data
             
         except Exception as e:
-            print(f"OCR処理エラー: {e}")
+            logging.error(f"OCR処理エラー: {e}")
             return None
     
     def _create_basic_survey_point(self, image_entry: ImageEntry) -> SurveyPoint:
         """基本的なSurveyPointを作成（OCR処理なし）"""
         if not image_entry.image_path:
             return SurveyPoint()
-            
         capture_time = get_capture_time_with_fallback(image_entry.image_path)
         if capture_time is None:
             try:
                 capture_time = os.path.getmtime(image_entry.image_path)
             except:
                 pass
-                
+        # datetime型ならtimestampに変換、float以外はNone
+        if isinstance(capture_time, datetime):
+            capture_time = capture_time.timestamp()
+        elif not isinstance(capture_time, float):
+            capture_time = None
         sp = SurveyPoint(
             capture_time=capture_time
         )
-        sp.filename = os.path.basename(image_entry.image_path)
+        sp.filename = os.path.basename(image_entry.image_path) if image_entry.image_path else 'None'
         sp.image_path = image_entry.image_path
         return sp
 
@@ -152,14 +154,14 @@ def _load_image_entries(target_filename=None) -> ImageEntryList:
     # データ準備
     all_image_data = load_image_cache_master(project_root)
     if not all_image_data:
-        print("画像データが見つかりません。")
+        logging.error("画像データが見つかりません。")
         return ImageEntryList()
     
     # 単一画像指定の場合はフィルタリング
     if target_filename:
         all_image_data = [item for item in all_image_data if os.path.basename(item['image_path']) == target_filename]
         if not all_image_data:
-            print(f"❌ {target_filename} が見つかりません")
+            logging.error(f"❌ {target_filename} が見つかりません")
             return ImageEntryList()
     
     # print(f"総画像数: {len(all_image_data)}件")
@@ -181,9 +183,22 @@ def process_caption_board_ocr(args):
     """ImageEntry中心の新しいパイプライン処理"""
     # --verbose/-v が無ければ quiet モード（詳細ログ抑止）
     verbose = any(arg in ('-v', '--verbose') for arg in args[1:])
+    # logging レベル設定: -v/--verbose で DEBUG, それ以外は INFO
+    logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO,
+                        format='%(levelname)s: %(message)s', force=True)
 
-    # 最初の位置引数（ファイル名）を抽出
-    non_option_args = [a for a in args[1:] if not a.startswith('-')]
+    # 最初の位置引数（ファイル名）を抽出 (--start/--end の値は除外）
+    non_option_args = []
+    skip_next = False
+    for a in args[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if a in ('--start', '--end'):
+            skip_next = True  # 次のトークンは数値なのでスキップ
+            continue
+        if not a.startswith('-'):
+            non_option_args.append(a)
     target_filename = non_option_args[0] if non_option_args else None
 
     # quiet モードなら stdout を一時的に抑止
@@ -193,17 +208,40 @@ def process_caption_board_ocr(args):
     if not verbose:
         _suppress_ctx = _ctx.redirect_stdout(_io.StringIO())
 
+    # --start/--end オプションの追加
+    start_idx = None
+    end_idx = None
+    for i, arg in enumerate(args[1:]):
+        if arg == '--start' and i+2 <= len(args[1:]):
+            try:
+                start_idx = int(args[1:][i+1])
+            except Exception:
+                pass
+        if arg == '--end' and i+2 <= len(args[1:]):
+            try:
+                end_idx = int(args[1:][i+1])
+            except Exception:
+                pass
+
     with _suppress_ctx:
         # 1. ImageEntryListを作成
         image_entries = _load_image_entries(target_filename)
         if not image_entries.entries:
-            print("処理対象の画像が見つかりません")
+            logging.error("処理対象の画像が見つかりません")
             return
+
+        # 範囲指定があればスライス
+        entries = image_entries.entries
+        if start_idx is not None or end_idx is not None:
+            s = (start_idx-1) if start_idx else 0
+            e = end_idx if end_idx else len(entries)
+            entries = entries[s:e]
+            image_entries.entries = entries
 
         # 2. OCRパイプラインを初期化
         pipeline = CaptionBoardOCRPipeline(project_root, src_dir)
         if not pipeline.initialize_engine():
-            print("OCRエンジンの初期化に失敗しました")
+            logging.error("OCRエンジンの初期化に失敗しました")
             return
 
         # 3. 各ImageEntryに対してOCR処理を実行
@@ -216,6 +254,7 @@ def process_caption_board_ocr(args):
     # stdout 復帰後にサマリーのみ出力
     _sys.stdout = _original_stdout
 
+    from ocr_tools.caption_board_ocr_reporter import print_extracted_results_summary
     print_extracted_results_summary(final_results)
     save_success_results(final_results, project_root)
 

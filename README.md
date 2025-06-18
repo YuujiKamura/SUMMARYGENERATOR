@@ -12,6 +12,12 @@
 - `send_prompt.py` : AI間通信・プロセス連携用スクリプト
 - `run_*.py` : 各種ウィジェットやツールの単体起動用スクリプト
 - `yolo_data.db` : YOLOデータセット管理用DB（サンプル）
+- `ocr-ruby/` : Ruby版OCRシステム - DocumentAI APIによる測点情報抽出と補完
+  - `lib/` : OCR処理ライブラリ（DocumentAIクライアント、Survey Point補完など）
+  - `bin/` : 実行スクリプト群（メインプロセッサー、接続テスト、設定確認など）
+  - `config/` : DocumentAI設定ファイル
+  - `test_images/` : テスト用画像
+- `ocr_tools/` : Python版OCRツール（既存）
 
 ## 主要スクリプト・機能
 

@@ -62,5 +62,26 @@
       "role": "role_worker_emulsion_spray"
     }
   ],
-  "location": "小山 No.25"
+  "location": ")加裝補修工事(水防等含)(单画契約)",
+  "survey_point": {
+    "bbox": {
+      "id": 17480,
+      "image_id": 5087,
+      "cid": 1,
+      "cname": "caption_board",
+      "conf": 0.9260107278823853,
+      "x1": 6.41864013671875,
+      "y1": 644.582275390625,
+      "x2": 440.83062744140625,
+      "y2": 920.23779296875,
+      "role": null
+    },
+    "ocr_skipped": null,
+    "ocr_skip_reason": null,
+    "filename": "RIMG8587.JPG",
+    "image_path": "H:\\マイドライブ\\〇東区市道（2工区）舗装補修工事（水防等含）（単価契約）\\６工事写真\\0530小山工区\\RIMG8587.JPG",
+    "capture_time": 1748574821.0,
+    "location_value": ")加裝補修工事(水防等含)(单画契約)"
+  },
+  "capture_time": 1748574821.0
 }

@@ -6,8 +6,9 @@ from src.utils.record_matching_utils import match_roles_records_one_stop
 from src.services.summary_data_service import SummaryDataService
 from src.dictionary_manager import DictionaryManager
 from src.utils.role_mapping_utils import load_role_mapping
-from src.db_manager import ImageManager, BBoxManager, ChainRecordManager
+from src.db_manager import ImageManager, BBoxManager, ChainRecordManager, DBConnection
 from src.utils.chain_record_utils import ChainRecord
+from ocr_tools.survey_point import SurveyPoint as _SP
 
 class ImageDataManager:
     def __init__(self, image_list_json_path=None, cache_dir=None):
@@ -37,6 +38,24 @@ class ImageDataManager:
                 image_id = img["id"]
                 img_path = img["image_path"]
                 bboxes = BBoxManager.get_bboxes_for_image(image_id)
+                # --- SurveyPoint 取得 ---
+                survey_point_dict = None
+                with DBConnection() as _conn:
+                    sp_row = _conn.execute("SELECT * FROM survey_points WHERE image_id=?", (image_id,)).fetchone()
+                    if sp_row:
+                        survey_point_dict = dict(sp_row)
+                        # JSON列を展開
+                        import json as _json
+                        if 'values_json' in survey_point_dict and survey_point_dict['values_json']:
+                            try:
+                                survey_point_dict['values'] = _json.loads(survey_point_dict['values_json'])
+                            except Exception:
+                                survey_point_dict['values'] = {}
+                        if 'inferred_json' in survey_point_dict and survey_point_dict['inferred_json']:
+                            try:
+                                survey_point_dict['inferred_values'] = _json.loads(survey_point_dict['inferred_json'])
+                            except Exception:
+                                survey_point_dict['inferred_values'] = {}
                 cache_json = {
                     "image_path": img_path,
                     "bboxes": bboxes
@@ -59,6 +78,8 @@ class ImageDataManager:
                     cache_json=cache_json,
                     roles=roles
                 )
+                if survey_point_dict:
+                    entry.survey_point = _SP.from_raw(survey_point_dict) if hasattr(_SP, 'from_raw') else _SP(**survey_point_dict)
                 entries.append(entry)
             self.entries = entries
             log('A_IMAGE_LOAD', {'count': len(images), 'image_paths': [img["image_path"] for img in images[:10]]})

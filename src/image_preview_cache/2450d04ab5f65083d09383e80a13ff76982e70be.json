@@ -50,5 +50,29 @@
       "role": "truck_4t_loading_asphalt"
     }
   ],
-  "location": "５月３０日：１台目"
+  "location": ")舖裝補修工事",
+  "survey_point": {
+    "bbox": {
+      "id": 17472,
+      "image_id": 5085,
+      "cid": 1,
+      "cname": "caption_board",
+      "conf": 0.9631889462471008,
+      "x1": 815.4488525390625,
+      "y1": 377.8216552734375,
+      "x2": 1215.23974609375,
+      "y2": 656.5345458984375,
+      "role": "caption_board_thermometer"
+    },
+    "ocr_skipped": null,
+    "ocr_skip_reason": null,
+    "filename": "RIMG8589.JPG",
+    "image_path": "H:\\マイドライブ\\〇東区市道（2工区）舗装補修工事（水防等含）（単価契約）\\６工事写真\\0530小山工区\\RIMG8589.JPG",
+    "capture_time": 1748576964.0,
+    "date_value": "5/30",
+    "location_value": ")舖裝補修工事",
+    "count_value": "1台目",
+    "inferred_date_count": "5/30|1台目"
+  },
+  "capture_time": 1748576964.0
 }

@@ -13,6 +13,24 @@ from typing import Any
 
 from PyQt6.QtWidgets import QMessageBox
 
+# --- PathManager をOCRユーティリティへ注入 -------------------------
+try:
+    from src.utils.path_manager import path_manager as _pm
+    # top-level module
+    try:
+        from ocr_value_extractor import inject_path_manager as _inj1
+        _inj1(_pm)
+    except Exception:
+        pass
+    # src.ocr_tools module
+    try:
+        from src.ocr_tools.ocr_value_extractor import inject_path_manager as _inj2
+        _inj2(_pm)
+    except Exception:
+        pass
+except Exception:
+    pass
+
 # --- OCR パイプライン --------------------------------------------------
 from ocr_tools.process_caption_board_ocr import CaptionBoardOCRPipeline
 from src.utils.image_entry import ImageEntry
@@ -39,8 +57,9 @@ def run_ocr_detection(parent: Any):
             return
 
         # OCR 実行 ------------------------------------------------------
-        from src.utils.image_entry import ImageEntryList
-        from ocr_tools.supplement_runner import SupplementRunner, TIME_WINDOW_SEC as _TW
+        from src.utils.image_entry import ImageEntry, ImageEntryList
+        from ocr_tools.supplement_runner import SupplementRunner
+        _TW = 300
 
         image_entries = []
         for ent in entries:
@@ -112,6 +131,13 @@ def run_ocr_detection(parent: Any):
                     print(f"[CACHE_UPDATE_ERROR] {cache_e}")
 
             conn.commit()
+
+        # --- サマリー出力 ---
+        try:
+            from ocr_tools.caption_board_ocr_reporter import print_extracted_results_summary
+            print_extracted_results_summary(final_results)
+        except Exception:
+            pass
 
         QMessageBox.information(parent, "完了", "OCR測点検出が終了し、データベースへ登録しました。")
 

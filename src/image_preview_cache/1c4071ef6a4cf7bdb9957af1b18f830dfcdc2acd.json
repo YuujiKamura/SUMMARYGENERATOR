@@ -62,5 +62,26 @@
       "role": "surface_crushed_stone"
     }
   ],
-  "location": "小山 No.25"
+  "location": ")城裝補修工事(水防等含)(单修契約)",
+  "survey_point": {
+    "bbox": {
+      "id": 17541,
+      "image_id": 5105,
+      "cid": 1,
+      "cname": "caption_board",
+      "conf": 0.8966355323791504,
+      "x1": 815.0977783203125,
+      "y1": 678.8961791992188,
+      "x2": 1198.4100341796875,
+      "y2": 937.8715209960938,
+      "role": null
+    },
+    "ocr_skipped": null,
+    "ocr_skip_reason": null,
+    "filename": "RIMG8569.JPG",
+    "image_path": "H:\\マイドライブ\\〇東区市道（2工区）舗装補修工事（水防等含）（単価契約）\\６工事写真\\0530小山工区\\RIMG8569.JPG",
+    "capture_time": 1748571436.0,
+    "location_value": ")城裝補修工事(水防等含)(单修契約)"
+  },
+  "capture_time": 1748571436.0
 }

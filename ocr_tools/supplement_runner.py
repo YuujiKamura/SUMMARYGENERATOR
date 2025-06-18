@@ -7,9 +7,11 @@ from __future__ import annotations
 
 from typing import List, Optional
 import os
+import logging
 
 # 長過ぎる import 行を分割
 from .exif_utils import (
+    get_capture_time_with_fallback,
     extract_image_number,
 )
 from .survey_point import SurveyPoint
@@ -34,33 +36,22 @@ class SupplementRunner:
         )
         final_results: List[dict] = []
 
-        # 単一パスで順方向に走査し、必要に応じてその場で補完 ----------------
+        # 単一パスで順方向に走査し、必要に応じて補完 ----------------
         for i, entry in enumerate(sorted_entries):
             sp = entry.survey_point
-            # survey_point が存在し、不完全な場合のみ補完を試みる
+            # prev / next の取得
+            prev_sp: Optional[SurveyPoint] = (
+                sorted_entries[i - 1].survey_point if i > 0 else None
+            )
+            next_sp: Optional[SurveyPoint] = (
+                sorted_entries[i + 1].survey_point if i + 1 < len(sorted_entries) else None
+            )
+
             if sp is None:
-                continue
+                # OCR 失敗などで SurveyPoint が未生成の場合は空インスタンスを用意
+                sp = SurveyPoint()
 
-            if hasattr(sp, "is_incomplete") and sp.is_incomplete():
-
-                # 前後の survey_point を探索
-                prev_sp: Optional[SurveyPoint] = None
-                next_sp: Optional[SurveyPoint] = None
-
-                # 前方向探索（i-1, i-2, ...）
-                for j in range(i - 1, -1, -1):
-                    cand_sp = sorted_entries[j].survey_point
-                    if cand_sp is not None:
-                        prev_sp = cand_sp
-                        break
-
-                # 後方向探索（i+1, i+2, ...）
-                for j in range(i + 1, len(sorted_entries)):
-                    cand_sp = sorted_entries[j].survey_point
-                    if cand_sp is not None:
-                        next_sp = cand_sp
-                        break
-
+            if sp.isIncorrect():
                 supplemented = SupplementRunner.supplement_by_closest(
                     sp,
                     prev_sp,
@@ -68,12 +59,19 @@ class SupplementRunner:
                     time_window_sec=time_window_sec,
                     keys=["location", "date_count"],
                 )
-
-                # update lists
                 entry.survey_point = supplemented
-                sorted_entries[i].survey_point = supplemented
-
-            # ループ毎に現在の survey_point を結果に追加
+                # 補完が行われた場合のみログ
+                if "supplement_source" in supplemented.meta:
+                    import logging as _lg
+                    keys_changed = list(supplemented.inferred_values.keys())
+                    _lg.info(
+                        "[補完] %s ← %s | keys=%s | values=%s",
+                        entry.filename or os.path.basename(entry.image_path),
+                        supplemented.meta.get("supplement_source"),
+                        keys_changed,
+                        {k: supplemented.inferred_values[k] for k in keys_changed},
+                    )
+            # 補完の有無に関わらず dict 化して収集
             final_results.append(entry.survey_point.to_dict())
 
         return final_results
@@ -105,11 +103,27 @@ class SupplementRunner:
         if new_sp.capture_time is None:
             return new_sp
 
+        # --- 型を float(timestamp) に正規化 --------------------------------
+        def _to_ts(val):
+            from datetime import datetime
+            if val is None:
+                return None
+            if isinstance(val, (int, float)):
+                return float(val)
+            if isinstance(val, datetime):
+                return val.timestamp()
+            return None
+
+        new_sp.capture_time = _to_ts(new_sp.capture_time)
+
         # 候補を距離付きで収集
         cands = []
         for neigh in (prev_sp, next_sp):
             if neigh and neigh.capture_time is not None:
-                diff = abs(neigh.capture_time - new_sp.capture_time)
+                neigh_ts = _to_ts(neigh.capture_time)
+                if neigh_ts is None:
+                    continue
+                diff = abs(neigh_ts - new_sp.capture_time)
                 cands.append((diff, neigh))
 
         if not cands:
@@ -117,11 +131,18 @@ class SupplementRunner:
             return new_sp
 
         # 最も近い候補
-        diff, best_neigh = min(cands, key=lambda t: t[0])
-        if diff > time_window_sec:
+        diff_sec, best_neigh = min(cands, key=lambda t: t[0])
+        if diff_sec > time_window_sec:
             # 設定された許容差を超える場合は補完しない
             return new_sp
 
-        # 実際に補完
+        before = {k: getattr(new_sp, k, None) for k in keys}
         new_sp.supplement_from(best_neigh, keys)
-        return new_sp 
+        after = {k: getattr(new_sp, k, None) for k in keys}
+        if before != after:
+            logger = logging.getLogger(__name__)
+            # 箇条書き・簡潔な形式で出力
+            for k in keys:
+                if before.get(k) != after.get(k):
+                    logger.info(f"[補完] {getattr(new_sp, 'filename', '')} ← {getattr(best_neigh, 'filename', '')}: {after.get(k)}")
+        return new_sp

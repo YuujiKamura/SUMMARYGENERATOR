@@ -1,4 +1,4 @@
-import unicodedata
+import unicodedata, sys
 
 def get_display_width(text):
     """全角・半角を考慮した表示幅を返す（曖昧幅は1幅扱い）"""
@@ -57,6 +57,12 @@ def print_ocr_aa_layout(texts_with_boxes, image_width, image_height, cell_size=3
                 col = min(x // cell_size, cols - 1)
                 row = min(y // cell_size, rows - 1)
                 highlight_cells.add((row, col))
+    # 環境によっては '▶' が出力出来ないためエンコーディングに応じて代替文字を選択
+    arrow_char = '▶'
+    enc = sys.stdout.encoding or ''
+    if 'cp932' in enc.lower():
+        arrow_char = '>'
+
     for row_idx in range(rows):
         # 1. アドレス列を初期化
         line = []
@@ -86,7 +92,7 @@ def print_ocr_aa_layout(texts_with_boxes, image_width, image_height, cell_size=3
                 if (row_idx, col) in highlight_cells:
                     start = col * (cell_disp_width + 1) + 1
                     arrow_pos = max(0, start - 2)  # 2バイト分左
-                    line[arrow_pos] = '▶'
+                    line[arrow_pos] = arrow_char
         print(''.join(line).rstrip())
 
 # この行を削除またはコメントアウト

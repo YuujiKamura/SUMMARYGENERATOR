@@ -38,5 +38,26 @@
       "role": "thermometer"
     }
   ],
-  "location": "小山 5月30日"
+  "location": ")舖裝補修工事(水防等含)(单価契約)",
+  "survey_point": {
+    "bbox": {
+      "id": 17426,
+      "image_id": 5073,
+      "cid": 1,
+      "cname": "caption_board",
+      "conf": 0.7943345308303833,
+      "x1": 47.43772888183594,
+      "y1": 596.83251953125,
+      "x2": 505.631103515625,
+      "y2": 898.71875,
+      "role": "caption_board_thermometer"
+    },
+    "ocr_skipped": null,
+    "ocr_skip_reason": null,
+    "filename": "RIMG8601.JPG",
+    "image_path": "H:\\マイドライブ\\〇東区市道（2工区）舗装補修工事（水防等含）（単価契約）\\６工事写真\\0530小山工区\\RIMG8601.JPG",
+    "capture_time": 1748586558.0,
+    "location_value": ")舖裝補修工事(水防等含)(单価契約)"
+  },
+  "capture_time": 1748586558.0
 }

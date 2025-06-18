@@ -290,7 +290,33 @@ class PathManager:
 
     @property
     def image_cache_dir(self) -> Path:
+        """画像プレビュー用キャッシュ(JSON)のディレクトリを返す。
+
+        優先順位:
+        1. data/image_cache_dir_path.json に `{"image_cache_dir": "..."}` があればそのパス。
+        2. 従来の src/image_preview_cache。
+        ※OCR 結果キャッシュ (src/ocr_tools/ocr_cache) とは別物。"""
+
+        # 1. ユーザー設定(JSON)優先
+        try:
+            if self.image_cache_dir_config.exists():
+                with open(self.image_cache_dir_config, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                cache_dir_str = cfg.get("image_cache_dir")
+                if cache_dir_str:
+                    p = Path(cache_dir_str).expanduser().resolve()
+                    p.mkdir(parents=True, exist_ok=True)
+                    return p
+        except Exception:
+            pass  # フォールバック
+
+        # 2. デフォルトのプレビューキャッシュ
         return self.src_dir / "image_preview_cache"
+
+    @property
+    def ocr_result_cache_dir(self) -> Path:
+        """OCR結果(JSON)専用キャッシュディレクトリ。"""
+        return self.src_dir / "ocr_tools" / "ocr_cache"
 
     def get_retrain_data_dir(self) -> Path:
         """再学習用データディレクトリのパスを取得"""

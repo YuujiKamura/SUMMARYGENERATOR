@@ -52,5 +52,26 @@
       "role": "new_alminium_rod"
     }
   ],
-  "location": "小山No.24"
+  "location": ")舖裝補修工事",
+  "survey_point": {
+    "bbox": {
+      "id": 17496,
+      "image_id": 5092,
+      "cid": 1,
+      "cname": "caption_board",
+      "conf": 0.8739216923713684,
+      "x1": 86.5887451171875,
+      "y1": 121.3995361328125,
+      "x2": 963.64501953125,
+      "y2": 717.474609375,
+      "role": "caption_board_dekigata"
+    },
+    "ocr_skipped": null,
+    "ocr_skip_reason": null,
+    "filename": "RIMG8582.JPG",
+    "image_path": "H:\\マイドライブ\\〇東区市道（2工区）舗装補修工事（水防等含）（単価契約）\\６工事写真\\0530小山工区\\RIMG8582.JPG",
+    "capture_time": 1748573197.0,
+    "location_value": ")舖裝補修工事"
+  },
+  "capture_time": 1748573197.0
 }

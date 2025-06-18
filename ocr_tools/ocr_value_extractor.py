@@ -8,42 +8,76 @@ from glob import glob
 import tempfile
 import shutil
 import hashlib
-from ocr_config_loader import load_documentai_config
-from documentai_engine import DocumentAIOCREngine
+try:
+    from .ocr_config_loader import load_documentai_config  # package-relative
+except ImportError:  # script execution fallback
+    from ocr_tools.ocr_config_loader import load_documentai_config
+try:
+    from .documentai_engine import DocumentAIOCREngine  # package-relative
+except ImportError:
+    from ocr_tools.documentai_engine import DocumentAIOCREngine
 # from ocr_aa_layout import print_ocr_aa_layout
 from google.protobuf.json_format import MessageToDict
 from google.cloud.documentai_v1.types import Document
+import re
 
-# パスマネージャを使用してリソースパス解決
-try:
-    from utils.path_manager import PathManager
-    path_manager = PathManager()
-    CACHE_DIR = str(path_manager.src_dir / 'image_preview_cache')
-    # summarygeneratorプロジェクトではocr_tools内にpreset_rolesを配置
+# パスマネージャをDI（依存性注入）で受け取る
+# モジュールレベルでの初期化は行わず、必要に応じて外部から注入される
+_injected_path_manager = None
+
+def inject_path_manager(path_manager):
+    """PathManagerを外部から注入する"""
+    global _injected_path_manager
+    _injected_path_manager = path_manager
+
+def _get_paths():
+    """パス情報を取得（PathManagerまたはフォールバック）"""
+    if _injected_path_manager is not None:
+        CACHE_DIR = str(_injected_path_manager.src_dir / 'image_preview_cache')
+        print(f"[DEBUG] PathManager注入済み: {_injected_path_manager.project_root}")
+    else:
+        # フォールバック: 従来のパス解決方法
+        CACHE_DIR = os.path.join(os.path.dirname(__file__), '..', 'src', 'image_preview_cache')
+        print(f"[DEBUG] PathManagerフォールバック使用")
+    
+    # その他のパスは相対パスで解決（変更なし）
     PRESET_ROLES_PATH = os.path.join(os.path.dirname(__file__), 'preset_roles.json')
-    # DocumentAI設定ファイルもocr_tools/credential内に配置
     DOCUMENTAI_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'credential', 'documentai_config.json')
-    # OCRキャッシュとクレデンシャルをocr_tools内に配置
     OCR_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'ocr_cache')
     CREDENTIAL_PATH = os.path.join(os.path.dirname(__file__), 'credential', 'visionapi-437405-0cd91b6d2db4.json')
-    print(f"[INFO] PathManager使用: {path_manager.project_root}")
-except ImportError as e:
-    print(f"[WARN] PathManagerのインポートに失敗: {e}")
-    # フォールバック: 従来のパス解決方法
-    CACHE_DIR = os.path.join(os.path.dirname(__file__), '..', 'src', 'image_preview_cache')
-    PRESET_ROLES_PATH = os.path.join(os.path.dirname(__file__), 'preset_roles.json')
-    # DocumentAI設定ファイルもocr_tools/credential内に配置
-    DOCUMENTAI_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'credential', 'documentai_config.json')
-    OCR_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'ocr_cache')
-    CREDENTIAL_PATH = os.path.join(os.path.dirname(__file__), 'credential', 'visionapi-437405-0cd91b6d2db4.json')
-os.makedirs(OCR_CACHE_DIR, exist_ok=True)
+    
+    return {
+        'CACHE_DIR': CACHE_DIR,
+        'PRESET_ROLES_PATH': PRESET_ROLES_PATH,
+        'DOCUMENTAI_CONFIG_PATH': DOCUMENTAI_CONFIG_PATH,
+        'OCR_CACHE_DIR': OCR_CACHE_DIR,
+        'CREDENTIAL_PATH': CREDENTIAL_PATH
+    }
 
-# デバッグ用：設定されたパスを表示
-print(f"[DEBUG] OCR_CACHE_DIR: {OCR_CACHE_DIR}")
-print(f"[DEBUG] CACHE_DIR: {CACHE_DIR}")
-print(f"[DEBUG] PRESET_ROLES_PATH: {PRESET_ROLES_PATH}")
-print(f"[DEBUG] DOCUMENTAI_CONFIG_PATH: {DOCUMENTAI_CONFIG_PATH}")
-print(f"[DEBUG] CREDENTIAL_PATH: {CREDENTIAL_PATH}")
+# パス情報を遅延取得
+def get_cache_dir():
+    return _get_paths()['CACHE_DIR']
+
+def get_preset_roles_path():
+    return _get_paths()['PRESET_ROLES_PATH']
+
+def get_documentai_config_path():
+    return _get_paths()['DOCUMENTAI_CONFIG_PATH']
+
+def get_ocr_cache_dir():
+    paths = _get_paths()
+    ocr_cache_dir = paths['OCR_CACHE_DIR']
+    os.makedirs(ocr_cache_dir, exist_ok=True)
+    return ocr_cache_dir
+
+def get_credential_path():
+    return _get_paths()['CREDENTIAL_PATH']
+# デバッグ用：設定されたパスを表示（削除）
+# print(f"[DEBUG] OCR_CACHE_DIR: {OCR_CACHE_DIR}")
+# print(f"[DEBUG] CACHE_DIR: {CACHE_DIR}")
+# print(f"[DEBUG] PRESET_ROLES_PATH: {PRESET_ROLES_PATH}")
+# print(f"[DEBUG] DOCUMENTAI_CONFIG_PATH: {DOCUMENTAI_CONFIG_PATH}")
+# print(f"[DEBUG] CREDENTIAL_PATH: {CREDENTIAL_PATH}")
 
 MIN_BBOX_RATIO = 0.5
 
@@ -88,7 +122,7 @@ def get_image_size_local(image_path):
         return img.width, img.height, local_path
 
 def init_documentai_engine():
-    conf = load_documentai_config(DOCUMENTAI_CONFIG_PATH)
+    conf = load_documentai_config(get_documentai_config_path())
     project_id = conf.get('project_id', '')
     location = conf.get('location', '')
     processor_id = conf.get('processor_id', '')
@@ -157,28 +191,30 @@ def extract_texts_with_boxes_from_documentai_result(document, image_width, image
         #                     results.append({'text': text, 'x': x, 'y': y})
     return results
 
-def get_cache_path(image_path):
+def get_cache_path(image_path, ocr=False):
     h = hashlib.md5(image_path.encode('utf-8')).hexdigest()
-    cache_file = f"{h}.json"
-    cache_path = os.path.join(OCR_CACHE_DIR, cache_file)
-    print(f"[DEBUG] 生成されたハッシュ: {h}")
-    print(f"[DEBUG] キャッシュファイル名: {cache_file}")
+    if ocr:
+        cache_file = f"ocr_{h}.json"
+        cache_path = os.path.join(get_ocr_cache_dir(), cache_file)
+    else:
+        cache_file = f"{h}.json"
+        cache_path = os.path.join(get_cache_dir(), cache_file)
     return cache_path
 
 def load_ocr_cache(image_path):
-    cache_path = get_cache_path(image_path)
-    print(f"[DEBUG] キャッシュパス検索: {cache_path}")
-    print(f"[DEBUG] 元画像パス: {image_path}")
+    cache_path = get_cache_path(image_path, ocr=True)
     if os.path.exists(cache_path):
-        print(f"[DEBUG] キャッシュファイル見つかりました")
         with open(cache_path, encoding='utf-8') as f:
             return json.load(f)
     else:
-        print(f"[DEBUG] キャッシュファイルが存在しません")
+        print(f"[DEBUG] OCRキャッシュファイルが存在しません")
     return None
 
-def save_ocr_cache(image_path, ocr_result):
-    cache_path = get_cache_path(image_path)
+def save_ocr_cache(image_path, ocr_result, original_image_path=None):
+    # original_image_pathが指定されていればそれを、なければimage_pathを保存
+    ocr_result = dict(ocr_result)  # コピーして破壊的変更を避ける
+    ocr_result['image_path'] = original_image_path or image_path
+    cache_path = get_cache_path(image_path, ocr=True)
     with open(cache_path, 'w', encoding='utf-8') as f:
         json.dump(ocr_result, f, ensure_ascii=False, indent=2)
 
@@ -223,22 +259,70 @@ def process_image_json(json_path, preset_roles_path, documentai_engine, min_bbox
                     "name": documentai_engine.processor_name,
                     "raw_document": {"content": open(local_path, "rb").read(), "mime_type": "image/jpeg"}
                 })
-                document = result.document
-                # キャッシュ保存
-                save_ocr_cache(local_path, {"document": MessageToDict(document._pb)})
+                document = result.document                # キャッシュ保存
+                save_ocr_cache(local_path, {"document": MessageToDict(document._pb)}, image_path)
             text = document.text if hasattr(document, 'text') else ''
             # print(f"OCR結果:\n{text}\n{'-'*40}")  # ←この行を削除
             texts_with_boxes = extract_texts_with_boxes_from_documentai_result(document, img_w, img_h)
-            print("[DEBUG] texts_with_boxes:", texts_with_boxes)
+            merged_texts = merge_nearby_texts(texts_with_boxes, y_margin=25)
+            print("[DEBUG] merged_texts:", merged_texts)
             # print_ocr_aa_layout(texts_with_boxes, img_w, img_h)
             break
     if not found:
         print(f"[SKIP] 条件に合致するbboxなし: {json_path}")
 
+def merge_nearby_texts(texts_with_boxes, y_margin=25):
+    """
+    Y座標が近いテキスト同士を結合する（例: 工区:小山 + No. 26 → 工区:小山 No. 26）
+    """
+    if not texts_with_boxes:
+        return []
+    texts_with_boxes = sorted(texts_with_boxes, key=lambda t: (t['y'], t['x']))
+    merged = []
+    i = 0
+    while i < len(texts_with_boxes):
+        current = dict(texts_with_boxes[i])
+        j = i + 1
+        while j < len(texts_with_boxes) and abs(texts_with_boxes[j]['y'] - current['y']) < y_margin:
+            current['text'] += ' ' + texts_with_boxes[j]['text']
+            j += 1
+        merged.append(current)
+        i = j
+    return merged
+
+def extract_measurement_points_from_boxes(boxes, y_margin: int = 25):
+    """工区行 + No行 の 2 ボックス組み合わせで測点を抽出する簡易ロジック"""
+    results = []
+    if not boxes:
+        return results
+    # 正規表現定義
+    sec_re = re.compile(r'工区[:：]?\s*([\w一-龠々ヶ]+)')
+    no_re = re.compile(r'No[.．]?\s*([0-9０-９]+)', re.IGNORECASE)
+    for kw_box in boxes:
+        m_sec = sec_re.search(kw_box.get('text', ''))
+        if not m_sec:
+            continue
+        section = m_sec.group(1)
+        # 近傍の No ボックス探索
+        for val_box in boxes:
+            if val_box is kw_box:
+                continue
+            if abs(val_box.get('y', 0) - kw_box.get('y', 0)) > y_margin:
+                continue
+            m_no = no_re.search(val_box.get('text', ''))
+            if not m_no:
+                continue
+            number = m_no.group(1)
+            matched = f"{section} No.{number}"
+            results.append({'section': section, 'number': number, 'matched_text': matched,
+                            'x': kw_box.get('x'), 'y': kw_box.get('y')})
+            break  # 同じ工区行から複数取得しない
+    return results
+
 def main():
-    labels = load_preset_labels_and_roles(PRESET_ROLES_PATH)
+    labels = load_preset_labels_and_roles(get_preset_roles_path())
     engine = init_documentai_engine()
-    json_files = glob(os.path.join(CACHE_DIR, '*.json'))
+    json_files = glob(os.path.join(get_cache_dir(), '*.json'))
     # 条件に合致した画像のローカルパスリストを作成
     target_local_paths = []
     target_image_paths = []

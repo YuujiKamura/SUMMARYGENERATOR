@@ -1,5 +1,4 @@
 require_relative 'document_ai_client'
-require_relative 'result_record'
 require_relative 'survey_point'
 require_relative 'exif_reader'
 require 'json'
@@ -24,9 +23,11 @@ class OCRProcessor
     puts "対象画像数: #{image_paths.size}件"
     
     @results = []
+    @image_entries = nil
     
-    # 撮影時刻順にソート
-    sorted_images = sort_by_capture_time(image_paths)
+    # 呼び出し側で並び替え済みとみなし、受け取った順で処理
+    # （必要なら capture_time ソートのメソッドも残している）
+    sorted_images = image_paths
     
     # 各画像を処理
     sorted_images.each_with_index do |image_path, index|
@@ -39,6 +40,11 @@ class OCRProcessor
       # リアルタイム補完処理
       perform_realtime_supplement(result, index)
     end
+    
+    # 後処理: 不完全な場所を前後画像で補完
+    SurveyPoint.supplement_all_locations(@results, @time_window)
+    # 追加: 前後エントリから location/date_count の補完
+    SurveyPoint.supplement_from_neighbors_all(@results, @time_window)
     
     # 最終的な統計情報表示
     SurveyPoint.print_statistics(@results)
@@ -60,7 +66,7 @@ class OCRProcessor
     ocr_result['capture_time'] = capture_time
     
     # ResultRecord に変換
-    record = ResultRecord.from_raw(ocr_result)
+    record = SurveyPoint.from_raw(ocr_result)
     
     # 結果表示
     display_result(record)
@@ -208,5 +214,13 @@ class OCRProcessor
     else
       nil
     end
+  end
+  
+  # Python互換: SurveyPoint配列を ImageEntryList に変換
+  def image_entries
+    return @image_entries if @image_entries
+    require_relative 'image_entry'
+    entries = @results.map { |sp| ImageEntry.from_survey_point(sp) }
+    @image_entries = ImageEntryList.new(entries: entries, group_type: 'caption_board_images')
   end
 end

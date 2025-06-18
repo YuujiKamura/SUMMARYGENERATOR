@@ -4,11 +4,7 @@ from ocr_tools.ocr_value_pair_detector import (
     detect_value_pairs_from_boxes_enhanced,
 )
 
-DEFAULT_KEYWORD_LIST = [
-    "場所",
-    "日付",
-    "台数",
-]
+from ocr_tools.ocr_keyword_config import PRIMARY_KEYWORDS, KEYWORDS
 
 
 def extract_caption_board_values(
@@ -22,7 +18,7 @@ def extract_caption_board_values(
 
     Args:
         texts_with_boxes: DocumentAIなどから抽出した `{"text", "x", "y"}` リスト。
-        keyword_list: 抽出対象キーワード。デフォルトは DEFAULT_KEYWORD_LIST。
+        keyword_list: 抽出対象キーワード。デフォルトは PRIMARY_KEYWORDS。
         value_pattern: 数値系値に対する正規表現パターン。
         max_y_diff: キーワードと値ボックスの y 方向許容差。
         min_x_diff: キーワードと値ボックスの x 方向最小差。
@@ -35,12 +31,12 @@ def extract_caption_board_values(
             - count_value: str | None
     """
     if keyword_list is None:
-        keyword_list = DEFAULT_KEYWORD_LIST
+        keyword_list = PRIMARY_KEYWORDS
 
+    # value_pattern は将来拡張用に受け取るが現在は PairDetector 側で使用しない
     pairs = detect_value_pairs_from_boxes_enhanced(
         texts_with_boxes,
         keyword_list=keyword_list,
-        value_pattern=value_pattern,
         max_y_diff=max_y_diff,
         min_x_diff=min_x_diff,
     )
@@ -48,9 +44,17 @@ def extract_caption_board_values(
     def _get_value(keyword: str):  # pylint: disable=missing-docstring
         return next((p["value"] for p in pairs if p["keyword"] == keyword), None)
 
+    def _get_value_text(keyword: str):  # raw text including spaces
+        return next((p["value_text"].strip() for p in pairs if p["keyword"] == keyword), None)
+
+    location_val = _get_value("場所")
+    if location_val is None:
+        # 測点は value に格納された連結済み文字列を取得
+        location_val = _get_value("測点")
+
     return {
         "pairs": pairs,
-        "location_value": _get_value("場所"),
+        "location_value": location_val,
         "date_value": _get_value("日付"),
         "count_value": _get_value("台数"),
     } 

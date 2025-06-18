@@ -38,5 +38,26 @@
       "role": null
     }
   ],
-  "location": "小山"
+  "location": ")城装補修工事(水防等含)(单备契約)",
+  "survey_point": {
+    "bbox": {
+      "id": 17430,
+      "image_id": 5074,
+      "cid": 1,
+      "cname": "caption_board",
+      "conf": 0.8763799667358398,
+      "x1": 805.4388427734375,
+      "y1": 652.475341796875,
+      "x2": 1215.3385009765625,
+      "y2": 928.236328125,
+      "role": null
+    },
+    "ocr_skipped": null,
+    "ocr_skip_reason": null,
+    "filename": "RIMG8600.JPG",
+    "image_path": "H:\\マイドライブ\\〇東区市道（2工区）舗装補修工事（水防等含）（単価契約）\\６工事写真\\0530小山工区\\RIMG8600.JPG",
+    "capture_time": 1748581220.0,
+    "location_value": ")城装補修工事(水防等含)(单备契約)"
+  },
+  "capture_time": 1748581220.0
 }

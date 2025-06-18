@@ -1,4 +1,4 @@
-from ocr_tools.caption_board_ocr_filter import should_skip_ocr_by_size_and_aspect
+from caption_board_ocr_filter import should_skip_ocr_by_size_and_aspect
 
 def test_case():
     width = 1226

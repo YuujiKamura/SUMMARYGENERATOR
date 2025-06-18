@@ -86,5 +86,26 @@
       "role": "caption_board_dekigata"
     }
   ],
-  "location": "小山No.24"
+  "location": "小山",
+  "survey_point": {
+    "bbox": {
+      "id": 17508,
+      "image_id": 5094,
+      "cid": 1,
+      "cname": "caption_board",
+      "conf": 0.9234165549278259,
+      "x1": 699.3170166015625,
+      "y1": 495.89007568359375,
+      "x2": 822.6033935546875,
+      "y2": 594.9329223632812,
+      "role": "caption_board_dekigata"
+    },
+    "ocr_skipped": true,
+    "ocr_skip_reason": "小サイズ(12177 < 90000)",
+    "filename": "RIMG8580.JPG",
+    "image_path": "H:\\マイドライブ\\〇東区市道（2工区）舗装補修工事（水防等含）（単価契約）\\６工事写真\\0530小山工区\\RIMG8580.JPG",
+    "capture_time": 1748573185.0,
+    "inferred_location": "小山"
+  },
+  "capture_time": 1748573185.0
 }

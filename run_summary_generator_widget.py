@@ -50,8 +50,17 @@ if __name__ == "__main__":
     logging.info("[STARTUP] アプリケーション起動開始")
     app = QApplication(sys.argv)
     
+    # --- 起動オプション解析 -------------------------------------------------
+    real_test_mode = False  # 実データテストモード（OCR自動実行）
+    for arg in sys.argv:
+        if arg in ("--real-test-mode", "--real-data-test", "--ocr-test-mode"):
+            real_test_mode = True
+
     logging.info("[STARTUP] SummaryGeneratorWidget初期化開始")
-    w = SummaryGeneratorWidget()
+    w = SummaryGeneratorWidget(
+        test_mode=("--test-mode" in sys.argv) or real_test_mode,
+        ocr_auto_run=real_test_mode,
+    )
     w.show()
     logging.info("[STARTUP] ウィジェット表示完了")
 
@@ -71,6 +80,11 @@ if __name__ == "__main__":
     if timeout_ms is None and "--test-mode" in sys.argv:
         timeout_ms = 10000
         logging.info("[STARTUP] テストモード: 10秒タイムアウト")
+
+    # 実データテストモードの場合は 30 秒タイムアウト（指定が無ければ）
+    if timeout_ms is None and real_test_mode:
+        timeout_ms = 30000
+        logging.info("[STARTUP] 実データテストモード: 30秒タイムアウト")
 
     if timeout_ms is not None:
         def timeout_handler():

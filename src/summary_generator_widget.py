@@ -70,7 +70,7 @@ class SummaryGeneratorWidget(QMainWindow):
     サマリー生成メインウィジェット
     """
     test_finished = pyqtSignal()
-    def __init__(self, parent=None, test_mode=False):
+    def __init__(self, parent=None, test_mode: bool = False, ocr_auto_run: bool = False):
         super().__init__(parent)
         logger.info('SummaryGeneratorWidget: 初期化開始')
         # --- サービスクラスでDB・リソース初期化（1回だけ）---
@@ -95,6 +95,7 @@ class SummaryGeneratorWidget(QMainWindow):
         logger.info('ImageDataManager.from_db()呼び出し')
         self.vm = SummaryGeneratorViewModel(self.data_service)
         self.test_mode = test_mode
+        self.ocr_auto_run = ocr_auto_run
         self._first_show = True
         self._matching_done = False  # 一括マッチング実行済みフラグ
         self.setup_ui()
@@ -112,6 +113,18 @@ class SummaryGeneratorWidget(QMainWindow):
             self._first_show = False
             logger.info('showEvent: 初回表示で画像リスト自動ロード')
             self.load_image_list_from_path_manager()
+
+            # --- OCR 自動実行 --------------------------------------------------
+            if getattr(self, 'ocr_auto_run', False):
+                logger.info('showEvent: ocr_auto_run 有効。OCR測点検出を自動実行')
+                # 遅延実行で UI ブロック回避
+                from PyQt6.QtCore import QTimer
+                try:
+                    from src.actions.ocr_detection_action import run_ocr_detection
+                    QTimer.singleShot(100, lambda: run_ocr_detection(self))
+                except Exception as e:
+                    logger.error('自動 OCR 実行に失敗: %s', e)
+                # self._ocr_ran = True  # 再実行を防ぐ場合に使用
 
     def setup_ui(self):
         # UI構築は分離クラスに委譲

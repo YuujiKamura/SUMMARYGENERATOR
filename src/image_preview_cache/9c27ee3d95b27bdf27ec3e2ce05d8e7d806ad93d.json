@@ -50,5 +50,26 @@
       "role": null
     }
   ],
-  "location": "小山 No.25"
+  "location": ")誠装補修工事(水防等含)(单価契約)",
+  "survey_point": {
+    "bbox": {
+      "id": 17478,
+      "image_id": 5086,
+      "cid": 1,
+      "cname": "caption_board",
+      "conf": 0.7571596503257751,
+      "x1": 812.1419677734375,
+      "y1": 566.582275390625,
+      "x2": 1280.0,
+      "y2": 887.858154296875,
+      "role": null
+    },
+    "ocr_skipped": null,
+    "ocr_skip_reason": null,
+    "filename": "RIMG8588.JPG",
+    "image_path": "H:\\マイドライブ\\〇東区市道（2工区）舗装補修工事（水防等含）（単価契約）\\６工事写真\\0530小山工区\\RIMG8588.JPG",
+    "capture_time": 1748574834.0,
+    "location_value": ")誠装補修工事(水防等含)(单価契約)"
+  },
+  "capture_time": 1748574834.0
 }

@@ -28,15 +28,33 @@ def save_image_cache(image_path, bboxes, cache_dir=None):
         print(f"[キャッシュ保存失敗] {img_cache_path}: {e}")
         return False
 
-def load_image_cache(image_path, cache_dir=None):
+def load_image_cache(image_path, cache_dir=None, return_full: bool = False):
+    """画像パスからキャッシュJSONを読み込む。
+
+    Parameters
+    ----------
+    image_path : str
+        画像ファイルのパス。
+    cache_dir : str | None, default None
+        キャッシュディレクトリ。None の場合は `path_manager.image_cache_dir` が使用される。
+    return_full : bool, default False
+        True の場合は読み込んだ JSON 全体 (dict) を返す。
+        False の場合は旧互換のタプル ``(image_path, bboxes)`` を返す。
+    """
     img_cache_path = get_image_cache_path(image_path, cache_dir)
     if not os.path.exists(img_cache_path):
         print(f"[キャッシュ未発見] {img_cache_path}")
-        return None, []
+        return None if return_full else (None, [])
+
     try:
         with open(img_cache_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+
+        if return_full:
+            return data
+        # 旧互換: image_path と bboxes のタプルを返す
         return data.get("image_path"), data.get("bboxes", [])
+
     except Exception as e:
         print(f"[キャッシュ読込失敗] {img_cache_path}: {e}")
-        return None, []
+        return None if return_full else (None, [])

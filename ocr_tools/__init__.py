@@ -18,6 +18,17 @@ from .ocr_value_extractor import (
 from .documentai_engine import DocumentAIOCREngine
 from .ocr_config_loader import load_documentai_config, load_vision_config
 
+# re-export location_inference helpers
+# from .location_inference import (
+#     build_time_lookup,
+#     infer_survey_point_location,
+#     is_incomplete_survey_point_location,
+#     assign_inferred_survey_point_locations,
+#     infer_location,
+#     is_incomplete_location,
+#     assign_inferred_locations,
+# )
+
 __version__ = "1.0.0"
 __all__ = [
     'process_image_json',
@@ -27,5 +38,5 @@ __all__ = [
     'extract_texts_with_boxes_from_documentai_result',
     'DocumentAIOCREngine',
     'load_documentai_config',
-    'load_vision_config'
+    'load_vision_config',
 ]

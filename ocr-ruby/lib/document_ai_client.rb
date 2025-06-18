@@ -1,4 +1,7 @@
 require 'json'
+require 'digest'
+require 'fileutils'
+require 'pathname'
 
 # DocumentAI はオプショナル（デモモード用）
 begin
@@ -27,13 +30,84 @@ class DocumentAIClient
   # @param image_path [String] 画像ファイルのパス
   # @return [Hash] OCR結果のハッシュ
   def extract_text(image_path)
+    # --- キャッシュパス ---
+    cache_dirs = [PY_CACHE_DIR, RB_CACHE_DIR]
+    cache_path = nil
+    cache_dirs.each do |dir|
+      path = _cache_path_for(image_path, dir)
+      if File.exist?(path)
+        cache_path = path
+        break
+      end
+    end
+
+    # キャッシュヒット
+    if cache_path && File.exist?(cache_path)
+      begin
+        cached = JSON.parse(File.read(cache_path, encoding: 'utf-8'))
+
+        # --- ここで値抽出ロジックを最新版で再実行 ---
+        if cached['ocr_text']
+          require_relative 'caption_board_value_extractor'
+          boxes = nil
+          if cached['document'] && cached['document']['pages']
+            boxes = []
+            doc = cached['document']
+            text = doc['text'] || cached['ocr_text']
+            (doc['pages'] || []).each do |page|
+              (page['blocks'] || []).each do |blk|
+                segs = blk.dig('layout', 'textAnchor', 'textSegments')
+                next unless segs && !segs.empty?
+                start_idx = segs.first['startIndex'].to_i rescue 0
+                end_idx   = segs.first['endIndex'].to_i rescue 0
+                txt = text[start_idx...end_idx].to_s.strip
+                next if txt.empty?
+                verts = blk.dig('layout', 'boundingPoly', 'vertices') || []
+                # 有効な頂点(x,y が数値)を検索
+                v_valid = verts.find { |v| v['x'] && v['y'] }
+                v_valid ||= verts.first || {}
+                x_coord = v_valid['x']
+                y_coord = v_valid['y']
+                next if x_coord.nil? || y_coord.nil?
+                # 0,0 のダミー座標のみはスキップ
+                next if x_coord.to_i.zero? && y_coord.to_i.zero?
+
+                boxes << { 'text' => txt, 'x' => x_coord.to_i, 'y' => y_coord.to_i }
+              end
+            end
+          end
+
+          if boxes && !boxes.empty?
+            extracted = CaptionBoardValueExtractor.extract(boxes)
+            cached['location_value'] = extracted['location_value']
+            cached['date_value'] = extracted['date_value']
+            cached['count_value'] = extracted['count_value']
+          else
+            # 座標付きボックスが無い場合は値抽出しない
+            cached['location_value'] = nil
+            cached['date_value'] = nil
+            cached['count_value'] = nil
+          end
+        end
+
+        cached['from_cache'] = true
+        puts "[CACHE] OCRキャッシュヒット: #{File.basename(image_path)} (値を再抽出)"
+        return cached
+      rescue JSON::ParserError
+        # 壊れたキャッシュは無視して再OCR
+        warn "[CACHE] 壊れたキャッシュを無視: #{cache_path}"
+      end
+    end
+
     unless File.exist?(image_path)
       return create_error_result(image_path, "ファイルが存在しません")
     end
     
     # デモモードの場合はダミーデータを返す
     if @demo_mode
-      return generate_demo_result(image_path)
+      demo_res = generate_demo_result(image_path)
+      _save_cache(demo_res.merge('from_cache' => false), _cache_path_for(image_path, PY_CACHE_DIR))
+      return demo_res
     end
     
     begin
@@ -57,11 +131,16 @@ class DocumentAIClient
       document = response.document
       
       # 結果を解析
-      parse_document_result(image_path, document)
+      result_hash = parse_document_result(image_path, document)
+      result_hash['from_cache'] = false
+      _save_cache(result_hash, _cache_path_for(image_path, PY_CACHE_DIR))
+      result_hash
       
     rescue => e
       puts "OCRエラー (#{File.basename(image_path)}): #{e.message}"
-      create_error_result(image_path, e.message)
+      err_res = create_error_result(image_path, e.message)
+      _save_cache(err_res.merge('from_cache' => false), _cache_path_for(image_path, PY_CACHE_DIR))
+      err_res
     end
   end
   
@@ -128,26 +207,54 @@ class DocumentAIClient
   end
     # DocumentAI の結果を解析してハッシュに変換
   def parse_document_result(image_path, document)
-    # 基本テキスト抽出
+    # --- Document.text / blocks → lines と boxes へ分解 ---
     ocr_text = document.text || ""
-    
-    result = {
+    lines = ocr_text.split("\n").map(&:strip)
+
+    texts_with_boxes = []
+    begin
+      (document.pages || []).each do |page|
+        (page.blocks || []).each do |blk|
+          seg = blk.layout.text_anchor.text_segments.first
+          start_idx = seg.respond_to?(:start_index) ? seg.start_index.to_i : 0
+          end_idx   = seg.end_index.to_i
+          txt = ocr_text[start_idx...end_idx].to_s.strip
+          next if txt.empty?
+          verts = blk.dig('layout', 'boundingPoly', 'vertices') || []
+          # 有効な頂点(x,y が数値)を検索
+          v_valid = verts.find { |v| v['x'] && v['y'] }
+          v_valid ||= verts.first || {}
+          x_coord = v_valid['x']
+          y_coord = v_valid['y']
+          next if x_coord.nil? || y_coord.nil?
+          # 0,0 のダミー座標のみはスキップ
+          next if x_coord.to_i.zero? && y_coord.to_i.zero?
+
+          texts_with_boxes << { "text" => txt, "x" => x_coord.to_i, "y" => y_coord.to_i }
+        end
+      end
+    rescue StandardError
+      texts_with_boxes = []
+    end
+
+    extracted = if texts_with_boxes.empty?
+                   CaptionBoardValueExtractor.extract(lines)
+                 else
+                   CaptionBoardValueExtractor.extract(texts_with_boxes)
+                 end
+
+    puts "OCR抽出テキスト: #{ocr_text[0, 60]}#{'...' if ocr_text.length > 60}"
+
+    {
       'image_path' => image_path,
       'ocr_text' => ocr_text,
-      'location_value' => nil,
-      'date_value' => nil,
-      'count_value' => nil,
-      'confidence' => 0.9,  # DocumentAI は一般的に高い精度
+      'location_value' => extracted['location_value'],
+      'date_value' => extracted['date_value'],
+      'count_value' => extracted['count_value'],
+      'confidence' => 0.9,
       'error' => nil,
-      'capture_time' => nil  # ExifReaderで後で設定される
+      'capture_time' => nil
     }
-    
-    puts "OCR抽出テキスト: #{ocr_text.length > 50 ? ocr_text[0..50] + '...' : ocr_text}"
-    
-    # パターンマッチングによる値抽出
-    extract_by_patterns(result)
-    
-    result
   end
   
   # バウンディングボックス情報を抽出
@@ -179,11 +286,16 @@ class DocumentAIClient
     
     puts "パターンマッチング対象テキスト: #{text[0..100]}#{'...' if text.length > 100}"
     
-    # 測点パターン: "No. 26", "小山 No.25" など
+    # --------------------------
+    # 場所 / 測点 抽出
+    #   ・「場所 XXX」形式
+    #   ・「測点 No.26」形式
+    #   ・主要地名（市町村名）
+    # --------------------------
     location_patterns = [
-      /工区[:\s]*([^\s\n]+)/,
-      /No\.\s*(\d+)/,
-      /(小山|大田原|那須塩原|宇都宮|足利|佐野|栃木|真岡|矢板|塩谷|鹿沼|日光|さくら|大田原|那須烏山|下野)/
+      /場所[:\s]*([^\s\n]+)/,               # 場所 XXX
+      /測点[:\s]*(No\.?\s*\d+)/i,          # 測点 No.26
+      /(小山|宇都宮|那須塩原|大田原|足利|佐野|栃木|真岡|矢板|塩谷|鹿沼|日光|さくら|那須烏山|下野)/
     ]
     
     location_patterns.each do |pattern|
@@ -195,11 +307,13 @@ class DocumentAIClient
       end
     end
     
-    # 日付パターン: "5/30", "2024/05/30" など
+    # --------------------------
+    # 日付 抽出
+    # --------------------------
     date_patterns = [
-      /(\d{1,2}\/\d{1,2})/,
-      /(\d{4}\/\d{1,2}\/\d{1,2})/,
-      /(\d{1,2}-\d{1,2})/
+      /日付[:\s]*(\d{1,2}[\/\-]\d{1,2})/,      # 日付 5/30
+      /(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/,    # 2024/05/30
+      /(\d{1,2}[\/\-]\d{1,2})/                  # 5/30, 5-30
     ]
     
     date_patterns.each do |pattern|
@@ -211,10 +325,14 @@ class DocumentAIClient
       end
     end
     
-    # 台数パターン: "1台目", "5台" など
+    # --------------------------
+    # 台数 抽出
+    # --------------------------
     count_patterns = [
-      /(\d+台目?)/,
-      /(\d+\s*台)/
+      /台数[:\s]*(\d+台目?)/,          # 台数 1台目
+      /台数[:\s]*(\d+\s*台)/,          # 台数 5台
+      /(\d+台目?)/,                      # 1台目
+      /(\d+\s*台)/                      # 5台
     ]
     
     count_patterns.each do |pattern|
@@ -387,4 +505,21 @@ class DocumentAIClient
       raise "DocumentAI接続テストに失敗: #{e.message}"
     end
   end
+
+  # キャッシュパス生成
+  def _cache_path_for(image_path, cache_dir)
+    digest = Digest::MD5.hexdigest(File.absolute_path(image_path))
+    File.join(cache_dir, "#{digest}.json")
+  end
+
+  # キャッシュ保存
+  def _save_cache(result_hash, cache_path)
+    File.write(cache_path, JSON.pretty_generate(result_hash), mode: 'w', encoding: 'utf-8')
+  rescue StandardError => e
+    warn "[CACHE] キャッシュ保存失敗: #{e.message}"
+  end
+
+  ROOT_DIR = Pathname.new(__dir__).join('..', '..').expand_path.freeze
+  PY_CACHE_DIR = ROOT_DIR.join('ocr_tools', 'ocr_cache').to_s.freeze
+  RB_CACHE_DIR = ROOT_DIR.join('ocr-ruby', 'ocr_cache').to_s.freeze
 end

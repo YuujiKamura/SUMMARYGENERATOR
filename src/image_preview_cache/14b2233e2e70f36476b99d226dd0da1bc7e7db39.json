@@ -26,5 +26,29 @@
       "role": "thermometer"
     }
   ],
-  "location": "５月３０日：１台目"
+  "location": ")",
+  "survey_point": {
+    "bbox": {
+      "id": 17445,
+      "image_id": 5078,
+      "cid": 1,
+      "cname": "caption_board",
+      "conf": 0.9855173230171204,
+      "x1": 218.7916259765625,
+      "y1": 214.17202758789062,
+      "x2": 1272.17431640625,
+      "y2": 952.2005615234375,
+      "role": "caption_board_thermometer"
+    },
+    "ocr_skipped": null,
+    "ocr_skip_reason": null,
+    "filename": "RIMG8596.JPG",
+    "image_path": "H:\\マイドライブ\\〇東区市道（2工区）舗装補修工事（水防等含）（単価契約）\\６工事写真\\0530小山工区\\RIMG8596.JPG",
+    "capture_time": 1748578196.0,
+    "date_value": "5/30",
+    "location_value": ")",
+    "inferred_location": ")",
+    "count_value": "1台目"
+  },
+  "capture_time": 1748578196.0
 }
