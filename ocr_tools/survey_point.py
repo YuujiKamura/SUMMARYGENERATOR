@@ -120,7 +120,7 @@ class SurveyPoint:
             # 場所情報は has() だけでなく、完全性もチェック
             return not self.is_located()
         elif key == "date_count":
-            # date_count が無い、または不完全なら補完対象
+            # date_count が無い、または不完全な場合も不正確とみなす
             if not self.has("date_count"):
                 return True
             dc = self.inferred_values.get("date_count") or self.values.get("date_count")
@@ -279,8 +279,15 @@ class SurveyPoint:
         if matched_location_pair:
             return matched_location_pair.get('value', '')
         elif matched_date_pair and matched_count_pair:
+            # ペア由来の台数値が不完全な場合は補完された date_count を優先する
             date_val = matched_date_pair.get('value', '')
             count_val = matched_count_pair.get('value', '')
+            if not any(ch.isdigit() for ch in str(count_val)):
+                # 不完全とみなし、補完を確認
+                dc = self.inferred_values.get('date_count')
+                if dc and '|' in dc:
+                    dv, cv = dc.split('|', 1)
+                    return f"{dv} {cv}"
             return f"{date_val} {count_val}"
         # fallback: location, date_count, status, etc.
         loc = self.get('location')
