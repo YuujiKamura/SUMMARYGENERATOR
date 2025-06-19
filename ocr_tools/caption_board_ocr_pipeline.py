@@ -3,23 +3,36 @@ import json
 from datetime import datetime
 from ocr_tools.ocr_value_extractor import (
     extract_texts_with_boxes_from_documentai_result,
-    merge_nearby_texts,
     extract_measurement_points_from_boxes,
     load_ocr_cache,
     save_ocr_cache,
     copy_to_local,
     get_cache_path,
 )
-import logging
 from ocr_tools.caption_board_value_extractor import extract_caption_board_values
 from ocr_tools.caption_board_ocr_filter import should_skip_ocr_by_size_and_aspect
 from google.cloud.documentai_v1.types import Document
 from google.protobuf.json_format import MessageToDict
 from src.utils.image_cache_utils import get_image_cache_path, load_image_cache
-import sys
+import logging
+import re
 
 # ログ設定
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s', encoding='utf-8')
+
+TIME_WINDOW_SEC = 300  # 5分以内を隣接とみなす
+
+# ---------------------------------------------------------------------------
+# Helper: "No. 26" → "No.26" など、No. の後ろの空白を除去
+# 全角スペースやタブも対象
+# ---------------------------------------------------------------------------
+
+_NO_PATTERN = re.compile(r"(No\.?)[\s\u3000]+(\d+)", flags=re.IGNORECASE)
+
+def _normalize_no(text: str | None) -> str | None:
+    if not text:
+        return text
+    return _NO_PATTERN.sub(r"\1\2", text)
 
 def compute_bbox_metrics(bbox):
     """bbox: [x1, y1, x2, y2] or dict から width, height, area を返す（Noneは0扱い）"""
@@ -151,8 +164,12 @@ def process_caption_board_image(img_info, engine, ocr_tools_dir, src_dir):
             "raw_document": {"content": img_bytes, "mime_type": "image/jpeg"}
         })
         document = result.document
-        save_ocr_cache(local_image_path, {"document": MessageToDict(document._pb)}, img_info['image_path'])
-      # テキストボックス抽出
+        save_ocr_cache(
+            local_image_path,
+            {"document": MessageToDict(document._pb)},
+            img_info['image_path'],
+        )
+    # テキストボックス抽出
     texts_with_boxes = extract_texts_with_boxes_from_documentai_result(document, img_w, img_h)
     logging.debug(f"[BOXES] {texts_with_boxes}")
     # 近接結合は行わず、そのまま使用
@@ -178,6 +195,9 @@ def process_caption_board_image(img_info, engine, ocr_tools_dir, src_dir):
         location_value = extracted["location_value"]
     date_value = extracted["date_value"]
     count_value = extracted["count_value"]
+
+    # --- No.XX 形式のスペース除去 ---------------------------------------
+    location_value = _normalize_no(location_value)
 
     # どのペアで決まったかを記録
     matched_location_pair = next((p for p in pairs if p["keyword"] == "場所" and str(p["value"]) == str(location_value)), None)
