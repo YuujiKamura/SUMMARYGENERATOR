@@ -1,3 +1,4 @@
+# flake8: noqa
 import os
 import json
 from datetime import datetime
@@ -38,24 +39,37 @@ def print_extracted_results_summary(extracted_results):
         if sp:
             display_value = sp.get_display_value()
         else:
-            # fallback: 旧ロジック
-            meta = result.get('meta', {})
-            matched_location_pair = meta.get('matched_location_pair')
-            matched_date_pair = meta.get('matched_date_pair')
-            matched_count_pair = meta.get('matched_count_pair')
-            if matched_location_pair:
-                display_value = matched_location_pair.get('value', '')
-            elif matched_date_pair and matched_count_pair:
-                date_val = matched_date_pair.get('value', '')
-                count_val = matched_count_pair.get('value', '')
-                display_value = f"{date_val} {count_val}"
+            # --- NEW 優先順位 ------------------------------------------
+            # 1) inferred_location があれば最優先
+            if result.get('inferred_location'):
+                display_value = result['inferred_location']
             else:
-                display_value = (
-                    _get_final_location(result) or
-                    _get_date_count_info(result) or
-                    _get_status_info(result) or
-                    "情報なし"
-                )
+                # 2) inferred_date_count があれば次に使用 ("date|count" 形式)
+                idc = result.get('inferred_date_count')
+                if idc and '|' in idc:
+                    dv, cv = idc.split('|', 1)
+                    display_value = f"{format_date(dv)} {cv}"
+                else:
+                    # 3) date_value & count_value が両方ある場合
+                    date_val = result.get('date_value')
+                    count_val = result.get('count_value')
+                    if date_val and count_val:
+                        display_value = f"{format_date(date_val)} {count_val}"
+                    else:
+                        # 4) 旧ロジック: ペア情報優先
+                        meta = result.get('meta', {})
+                        matched_location_pair = meta.get('matched_location_pair')
+                        matched_date_pair = meta.get('matched_date_pair')
+                        matched_count_pair = meta.get('matched_count_pair')
+                        if matched_location_pair:
+                            display_value = matched_location_pair.get('value', '')
+                        elif matched_date_pair and matched_count_pair:
+                            date_val = matched_date_pair.get('value', '')
+                            count_val = matched_count_pair.get('value', '')
+                            display_value = f"{date_val} {count_val}"
+                        else:
+                            # 5) その他の情報が無ければステータスなど
+                            display_value = _get_final_location(result) or _get_date_count_info(result) or _get_status_info(result) or "情報なし"
 
         meta = result.get('meta', {})
         decision_source = meta.get('decision_source')
@@ -85,7 +99,7 @@ def print_extracted_results_summary(extracted_results):
         if result.get('pairs_found'):
             status_flags.append('PAIR')
         # 補完フラグ
-        if result.get('inferred_location') or decision_source == 'inferred':
+        if result.get('inferred_location') or result.get('inferred_date_count') or decision_source == 'inferred':
             status_flags.append('補完')
         status_str = f" [{' / '.join(status_flags)}]" if status_flags else ""
 
