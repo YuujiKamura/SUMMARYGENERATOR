@@ -22,7 +22,6 @@ from ocr_tools.ocr_value_extractor import (
 from src.utils.path_manager import path_manager
 from ocr_tools.caption_board_value_extractor import extract_caption_board_values
 from ocr_tools.caption_board_ocr_filter import should_skip_ocr_by_size_and_aspect
-from ocr_tools.ocr_keyword_config import PRIMARY_KEYWORDS
 
 ocr_cache_dir = os.path.join(project_root, "ocr_tools", "ocr_cache")
 master_json_path = path_manager.image_preview_cache_master
@@ -159,7 +158,7 @@ def analyse():
         
         extracted = extract_caption_board_values(
             texts_with_boxes,
-            keyword_list=PRIMARY_KEYWORDS,
+            keyword_list=None,
             value_pattern=r"([0-9]+\.?[0-9]*)\s*°?C?",
             max_y_diff=50,
             min_x_diff=5,

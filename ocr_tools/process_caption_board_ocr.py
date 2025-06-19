@@ -1,7 +1,7 @@
 import os
 import sys
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 import logging
 
 # --- パス設定と基本インポート ---
@@ -9,19 +9,18 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 src_dir = os.path.join(project_root, 'src')
 
-# packageルートを優先的に追加
-if project_root not in sys.path: sys.path.insert(0, project_root)
-if current_dir not in sys.path: sys.path.insert(0, current_dir)
-if src_dir not in sys.path: sys.path.insert(0, src_dir)
+# sys.path へ重複追加を避けつつパスを登録
+for _p in (project_root, current_dir, src_dir):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 # --- 外部モジュール ---
 from caption_board_ocr_pipeline import process_caption_board_image
 from ocr_tools.caption_board_ocr_reporter import (
     print_extracted_results_summary,
     save_success_results,
-    get_final_location_list,
 )
-from caption_board_ocr_data import load_image_cache_master, find_caption_board_images
+from caption_board_ocr_data import load_image_cache_master
 from exif_utils import get_capture_time_with_fallback, extract_image_number
 from survey_point import SurveyPoint
 from ocr_value_extractor import init_documentai_engine
@@ -147,21 +146,37 @@ class CaptionBoardOCRPipeline:
         )
         sp.filename = os.path.basename(image_entry.image_path) if image_entry.image_path else 'None'
         sp.image_path = image_entry.image_path
+        # ボード無し画像としてメタ情報を設定
+        sp.meta.update({
+            "ocr_skipped": True,
+            "ocr_skip_reason": "nonboard",
+            "decision_source": "nonboard",
+        })
         return sp
 
-def _load_image_entries(target_filename=None) -> ImageEntryList:
-    """全画像データからImageEntryListを作成する"""
+def _load_image_entries(target_filenames: list[str] | None = None) -> ImageEntryList:
+    """全画像データから ImageEntryList を作成する。
+
+    Parameters
+    ----------
+    target_filenames : list[str] | None, optional
+        処理対象とするファイル名のリスト。None の場合は全画像を対象とする。
+    """
     # データ準備
     all_image_data = load_image_cache_master(project_root)
     if not all_image_data:
         logging.error("画像データが見つかりません。")
         return ImageEntryList()
-    
-    # 単一画像指定の場合はフィルタリング
-    if target_filename:
-        all_image_data = [item for item in all_image_data if os.path.basename(item['image_path']) == target_filename]
+
+    # 指定ファイルのみ抽出
+    if target_filenames:
+        target_set = {fn.lower() for fn in target_filenames}
+        all_image_data = [
+            item for item in all_image_data
+            if os.path.basename(item['image_path']).lower() in target_set
+        ]
         if not all_image_data:
-            logging.error(f"❌ {target_filename} が見つかりません")
+            logging.error("❌ 指定された画像が見つかりません: %s", ", ".join(target_filenames))
             return ImageEntryList()
     
     # print(f"総画像数: {len(all_image_data)}件")
@@ -187,8 +202,8 @@ def process_caption_board_ocr(args):
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO,
                         format='%(levelname)s: %(message)s', force=True)
 
-    # 最初の位置引数（ファイル名）を抽出 (--start/--end の値は除外）
-    non_option_args = []
+    # 非オプション引数（ファイル名）を抽出 (--start/--end の値は除外）
+    non_option_args: list[str] = []
     skip_next = False
     for a in args[1:]:
         if skip_next:
@@ -199,7 +214,7 @@ def process_caption_board_ocr(args):
             continue
         if not a.startswith('-'):
             non_option_args.append(a)
-    target_filename = non_option_args[0] if non_option_args else None
+    target_filenames = non_option_args if non_option_args else None
 
     # quiet モードなら stdout を一時的に抑止
     import sys as _sys, io as _io, contextlib as _ctx
@@ -225,7 +240,7 @@ def process_caption_board_ocr(args):
 
     with _suppress_ctx:
         # 1. ImageEntryListを作成
-        image_entries = _load_image_entries(target_filename)
+        image_entries = _load_image_entries(target_filenames)
         if not image_entries.entries:
             logging.error("処理対象の画像が見つかりません")
             return
@@ -254,7 +269,7 @@ def process_caption_board_ocr(args):
     # stdout 復帰後にサマリーのみ出力
     _sys.stdout = _original_stdout
 
-    from ocr_tools.caption_board_ocr_reporter import print_extracted_results_summary
+    # 既にインポート済みの関数を利用してサマリー出力
     print_extracted_results_summary(final_results)
     save_success_results(final_results, project_root)
 

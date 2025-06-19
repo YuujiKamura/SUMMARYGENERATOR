@@ -92,13 +92,26 @@ class SurveyPoint:
 
     def set_inferred(self, key: str, value: str):
         """補完値を設定。locationの場合は不完全な値も上書きする。"""
+        # --- 値の設定 ---------------------------------------------------
         if key == "location":
-            # locationの場合は、不完全な値があっても補完する
+            # location の場合は、不完全な値があっても補完する
             if not self.is_located():
                 self.inferred_values[key] = value
-                self.meta["decision_source"] = "inferred"
         else:
             self.inferred_values[key] = value
+
+        # --- decision_source の更新 -----------------------------------
+        # 既存の decision_source に応じて更新する
+        current_src: str = self.meta.get("decision_source", "")
+
+        # nonboard → nonboard - inferred とする
+        if current_src == "nonboard":
+            self.meta["decision_source"] = "nonboard - inferred"
+        # すでに nonboard - inferred なら変更不要
+        elif current_src == "nonboard - inferred":
+            pass
+        else:
+            # それ以外（ocr 等）は単に inferred
             self.meta["decision_source"] = "inferred"
 
     def needs(self, key: str) -> bool:

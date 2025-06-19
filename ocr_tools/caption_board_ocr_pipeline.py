@@ -13,7 +13,6 @@ from ocr_tools.ocr_value_extractor import (
 import logging
 from ocr_tools.caption_board_value_extractor import extract_caption_board_values
 from ocr_tools.caption_board_ocr_filter import should_skip_ocr_by_size_and_aspect
-from ocr_tools.ocr_keyword_config import PRIMARY_KEYWORDS
 from google.cloud.documentai_v1.types import Document
 from google.protobuf.json_format import MessageToDict
 from src.utils.image_cache_utils import get_image_cache_path, load_image_cache
@@ -163,7 +162,7 @@ def process_caption_board_image(img_info, engine, ocr_tools_dir, src_dir):
     # ペアマッチング実行
     extracted = extract_caption_board_values(
         texts_with_boxes,
-        keyword_list=PRIMARY_KEYWORDS,
+        keyword_list=None,
         max_y_diff=dyn_max_y,
         min_x_diff=dyn_min_x,
     )

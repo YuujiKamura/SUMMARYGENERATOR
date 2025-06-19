@@ -30,8 +30,9 @@ def extract_caption_board_values(
             - date_value: str | None
             - count_value: str | None
     """
-    if keyword_list is None:
-        keyword_list = PRIMARY_KEYWORDS
+    # keyword_list が None の場合はすべてのペアルールを使用（CSV 定義をフル活用）
+    # 旧実装では PRIMARY_KEYWORDS で上書きしていたが、これだと "日付" や "台数" が無視されてしまう。
+    # None のままにして PairDetector 側に全ルール検索を委ねる。
 
     # value_pattern は将来拡張用に受け取るが現在は PairDetector 側で使用しない
     pairs = detect_value_pairs_from_boxes_enhanced(
